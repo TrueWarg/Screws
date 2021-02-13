@@ -11,9 +11,24 @@ from dataset.coco_dataset import CocoDataset
 DEVICE = device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-def train_epoch(model: nn.Module, optimizer: optim.Optimizer, data_loader: DataLoader) -> nn.Module:
+def train_epoch(model: nn.Module, optimizer: optim.Optimizer, data_loader: DataLoader, loss) -> nn.Module:
     model.train()
-    pass
+
+    optimizer.zero_grad()
+
+    for i, batch in data_loader:
+        images, ground_truth = batch
+
+        images = [image.to(DEVICE) for image in images]
+        ground_truth = [g.to(DEVICE) for g in ground_truth]
+
+        predicted = model(images)
+        loss_result = loss(predicted, ground_truth)
+        loss_result.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+
+    return model
 
 
 def train(args):
