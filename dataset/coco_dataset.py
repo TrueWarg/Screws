@@ -6,8 +6,8 @@ from torch.utils.data import Dataset
 
 
 class CocoDataset(Dataset):
-    def __init__(self, images_path: str, images: List, annotations: List, transformer=None):
-        self._transformer = transformer
+    def __init__(self, images_path: str, images: List, annotations: List, transform=None):
+        self._transform = transform
         self._images = images
         self._annotations = annotations
         self._images_path = images_path
