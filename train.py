@@ -2,7 +2,7 @@ import torch.optim as optim
 import torch
 import os
 
-from model.ssd_network import SSDNetwork
+from model.ssd.ssd_network import SSDNetwork
 from torchvision import models
 from torch import nn
 from torch.utils.data import DataLoader
