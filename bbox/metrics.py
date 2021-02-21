@@ -4,47 +4,50 @@ from bbox.converters import xcycwh_to_xyxy
 from math import cos
 
 
-def xyxy_iou(box_a: torch.Tensor, box_b: torch.Tensor) -> float:
+def _area(lt: torch.Tensor, rb: torch.Tensor) -> torch.Tensor:
+    hw = torch.clamp(rb - lt, min=0.0)
+    return hw[..., 0] * hw[..., 1]
+
+
+def xyxy_iou(boxes_a: torch.Tensor, boxes_b: torch.Tensor, eps=1e-5) -> torch.Tensor:
     """
     Calculate intersection over union in 2D space:
     IoU = INTERSECTION / UNION
-    :param box_a:  bounding box with format xyxy
-    :param box_b:  bounding box with format xyxy
-    :return: iou score in [0.0 - 1.0]
+    :param boxes_a:  bounding boxes with shape [N, 4] and with format xyxy
+    :param boxes_b:  bounding boxes with shape [N, 4] and with format xyxy
+    :param eps: additional value to union
+    :return: iou scores in [0.0 - 1.0] with shape [N, 4]
     """
-    x_a = max(box_a[0], box_b[0])
-    y_a = max(box_a[1], box_b[1])
-    x_b = min(box_a[2], box_b[2])
-    y_b = min(box_a[3], box_b[3])
+    left_top = torch.max(boxes_a[..., 2:], boxes_b[..., 2:])
+    right_bottom = torch.min(boxes_a[..., :2], boxes_b[..., :2])
+    intersection = _area(left_top, right_bottom)
 
-    intersection = max(0.0, (x_b - x_a)) * max(0.0, (y_b - y_a))
-
-    area_a = (box_a[2] - box_a[0]) * (box_a[3] - box_a[1])
-    area_b = (box_b[2] - box_b[0]) * (box_b[3] - box_b[1])
-
-    union = area_a + area_b - intersection
+    area_a = _area(boxes_a[..., 2:], boxes_a[..., :2])
+    area_b = _area(boxes_b[..., 2:], boxes_b[..., :2])
+    union = area_a + area_b - intersection + eps
 
     return intersection / union
 
 
-def xcycwh_iou(box_a: torch.Tensor, box_b: torch.Tensor) -> float:
+def xcycwh_iou(boxes_a: torch.Tensor, boxes_b: torch.Tensor, eps=1e-5) -> torch.Tensor:
     """
     Calculate intersection over union in 2D space:
     IoU = INTERSECTION / UNION
-    :param box_a:  bounding box with format xcycwh
-    :param box_b:  bounding box with format xcycwh
-    :return: iou score in [0.0 - 1.0]
+    :param boxes_a:  bounding boxes with shape [N, 4] and with format xcycwh
+    :param boxes_b:  bounding boxes with shape [N, 4] and with format xcycwh
+    :param eps: additional value to union
+    :return: iou scores in [0.0 - 1.0] with shape [N, 4]
     """
+    return xyxy_iou(xcycwh_to_xyxy(boxes_a), xcycwh_to_xyxy(boxes_b), eps)
 
-    return xyxy_iou(xcycwh_to_xyxy(box_a), xcycwh_to_xyxy(box_b))
 
-
-def rotated_xcycwh_iou(box_a: torch.Tensor, box_b: torch.Tensor) -> float:
+def rotated_xcycwh_iou(boxes_a: torch.Tensor, boxes_b: torch.Tensor, eps=1e-5) -> float:
     """
     Calculate rotated intersection over union in 2D space:
-    IoU = (INTERSECTION / UNION) * cos(angle_a - angle_b)
-    :param box_a:  bounding box with format xcycwha with angle in radian
-    :param box_b:  bounding box with format xcycwha with angle in radian
-    :return: iou score in [0.0 - 1.0]
+    RIoU = (INTERSECTION / UNION) * cos(angle_a - angle_b)
+    :param boxes_a:  bounding boxes with shape [N, 5] and with format xcycwha
+    :param boxes_b:  bounding boxes with shape [N, 5] and with format xcycwha
+    :param eps: additional value to union
+    :return: iou scores in [0.0 - 1.0] with shape [N, 4]
     """
-    return xcycwh_iou(box_a[:4], box_b[:4]) * cos(box_a[4] - box_b[4])
+    return xcycwh_iou(boxes_a[:4], boxes_b[:4], eps) * cos(boxes_a[4] - boxes_b[4])
