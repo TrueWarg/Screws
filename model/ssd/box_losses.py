@@ -1,44 +1,37 @@
+import math
+
 import torch
 from torch import nn
 from typing import Tuple
 import torch.nn.functional as F
 
 
-def match(overlap_threshold: float,
-          target_locs: torch.Tensor,
-          target_classes: torch.Tensor,
-          priors: torch.Tensor,
-          ) -> Tuple:
-    # todo implement matching method (move in some other py module)
-    pass
+def calculate_hard_negative_mining_mask(log_softmax_loss,
+                                        categories: torch.Tensor,
+                                        negative_negative_ratio: float
+                                        ) -> torch.Tensor:
+    positive_mask = categories > 0
+    positive_count = positive_mask.sum(dim=1, keepdim=True)
+    negative_count = positive_count * negative_negative_ratio
+    log_softmax_loss[positive_mask] = -math.inf
+    _, indexes = log_softmax_loss.sort(dim=1, descending=True)
 
 
 class RotatedMultiBoxLoss(nn.Module):
-    def __init__(self, num_classes: int, overlap_threshold: float):
+    def __init__(self, num_classes: int,
+                 overlap_threshold: float,
+                 positive_negative_ratio: float,
+                 ):
         super().__init__()
-        self.nun_classes = num_classes
+        self._num_classes = num_classes
         self._overlap_threshold = overlap_threshold
+        self._positive_negative_ratio = positive_negative_ratio
 
-    def forward(self, prediction: Tuple, targets: torch.Tensor):
-        localisations, confidences, priors = prediction
-        batch_size = localisations.size(0)
-        num_priors = priors.size(0)
-
-        matched_locs = torch.Tensor(localisations.size)
-        matched_confs = torch.LongTensor(batch_size, num_priors)
-
-        matched_locs.requires_grad = False
-        matched_confs.requires_grad = False
-
-        for batch_idx in range(batch_size):
-            target_locs = targets[batch_idx][:, :-1]
-            target_classes = targets[batch_idx][:, -1]
-
-            matched_loc, matched_conf = match(self._overlap_threshold, target_locs, target_classes, priors)
-            matched_locs[batch_idx] = matched_loc
-            matched_confs[batch_idx] = matched_conf
-
-        # todo complete full implementation
-        # calculate location loss
-        # calculate class loss
-
+    def forward(self,
+                predicted_boxes: torch.Tensor,
+                confidences: torch.Tensor,
+                target_boxes: torch.Tensor,
+                target_categories: torch.Tensor):
+        with torch.no_grad():
+            loss = -F.log_softmax(confidences, dim=2)[:, :, 0]
+            mask = calculate_hard_negative_mining_mask(loss, target_categories, self.neg_pos_ratio)

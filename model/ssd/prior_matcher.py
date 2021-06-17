@@ -8,7 +8,7 @@ def _make_offset_transformation(boxes: torch.Tensor, priors: torch.Tensor) -> to
     return torch.cat([
         (boxes[..., :2] - priors[..., :2]) / priors[..., 2:],
         torch.log(boxes[..., 2:4] / priors[..., 2:4]),
-        torch.tan(boxes[..., 4] - priors[..., 4])
+        torch.cos(boxes[..., 4] - priors[..., 4])
     ], dim=boxes.dim() - 1)
 
 
