@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from torch import nn, Tensor
 
 from bbox import converters
+from initializers import xavier_init
 
 
 class SSDNetwork(nn.Module):
@@ -34,6 +35,28 @@ class SSDNetwork(nn.Module):
 
         if is_test:
             self._priors = config.priors.to(device)
+
+    def init_from_base_net(self, model):
+        self._base_net.load_state_dict(torch.load(model, map_location=lambda storage, loc: storage), strict=True)
+        self._feature_extractors.apply(xavier_init)
+        self._classification_headers.apply(xavier_init)
+        self._regression_headers.apply(xavier_init)
+
+    def init_from_pretrained_ssd(self, model):
+        state_dict = torch.load(model, map_location=lambda storage, loc: storage)
+        state_dict = {k: v for k, v in state_dict.items() if
+                      not (k.startswith("classification_headers") or k.startswith("regression_headers"))}
+        model_dict = self.state_dict()
+        model_dict.update(state_dict)
+        self.load_state_dict(model_dict)
+        self._classification_headers.apply(xavier_init)
+        self._regression_headers.apply(xavier_init)
+
+    def init_default(self):
+        self._base_net.apply(xavier_init)
+        self._feature_extractors.apply(xavier_init)
+        self._classification_headers.apply(xavier_init)
+        self._regression_headers.apply(xavier_init)
 
     def forward(self, x: Tensor) -> Tuple[Tensor, Tensor]:
         confidences = []
