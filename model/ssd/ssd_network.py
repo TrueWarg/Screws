@@ -1,82 +1,97 @@
-import torch.nn.functional as F
+from typing import List, Tuple
 
+import torch
+import torch.nn.functional as F
 from torch import nn, Tensor
-from torchvision.models import ResNet
-from typing import List
+
+from bbox import converters
 
 
 class SSDNetwork(nn.Module):
-    def __init__(self, resnet34: ResNet):
-        super().__init__()
-        self._base = create_resnet34_based_block()
-        self._extra_conv1 = create_extra_conv1()
-        self._extra_conv2 = create_extra_conv2()
-        self._extra_conv3 = create_extra_conv3()
+    def __init__(self,
+                 base_net: nn.ModuleList,
+                 feature_extractors: nn.ModuleList,
+                 classification_headers: nn.ModuleList,
+                 regression_headers: nn.ModuleList,
+                 source_layer_indexes: List[int],
+                 num_classes: int,
+                 device,
+                 config=None,
+                 is_test=None,
+                 ):
+        super(SSDNetwork, self).__init__()
 
-        self._side_base_conv1 = side_conv(in_channels=256)
-        self._side_extra_conv1 = side_conv(in_channels=512)
-        self._side_extra_conv2 = side_conv(in_channels=512)
-        self._side_extra_conv3 = side_conv(in_channels=256)
+        self._num_classes = num_classes
+        self._base_net = base_net
+        self._feature_extractors = feature_extractors
+        self._classification_headers = classification_headers
+        self._regression_headers = regression_headers
+        self._source_layer_indexes = source_layer_indexes
+        self._num_classes = num_classes
+        self._device = device
+        self._config = config
+        self._is_test = is_test
 
-    def forward(self, x: Tensor) -> List[Tensor]:
-        output = list()
+        if is_test:
+            self._priors = config.priors.to(device)
 
-        base_output = self._base.forward(x)
-        output.append(self.side_base_conv1(F.relu(base_output)))
+    def forward(self, x: Tensor) -> Tuple[Tensor, Tensor]:
+        confidences = []
+        locations = []
+        start_layer_index = 0
+        header_index = 0
 
-        extra_conv1_output = F.relu(self._extra_conv1(base_output))
-        output.append(self.side_extra_conv1(extra_conv1_output))
+        for end_layer_index in self._source_layer_indexes:
+            if isinstance(end_layer_index, tuple):
+                added_layer = end_layer_index[1]
+                end_layer_index = end_layer_index[0]
+            else:
+                added_layer = None
 
-        extra_conv2_output = self._extra_conv2(extra_conv1_output)
-        output.append(self._side_extra_conv2(extra_conv2_output))
+            for layer in self._base_net[start_layer_index: end_layer_index]:
+                x = layer(x)
 
-        extra_conv3_output = self._extra_conv3(extra_conv2_output)
-        output.append(self._side_extra_conv3(extra_conv3_output))
+            if added_layer:
+                base_net_output = added_layer(x)
+            else:
+                base_net_output = x
 
-        return output
+            start_layer_index = end_layer_index
+            confidence, location = self._compute_header(header_index, base_net_output)
+            header_index += 1
+            confidences.append(confidence)
+            locations.append(location)
 
+            for layer in self._base_net[end_layer_index:]:
+                x = layer(x)
 
-def create_resnet34_based_block(resnet34: ResNet) -> nn.Module:
-    return nn.Sequential(
-        resnet34.conv1,
-        resnet34.bn1,
-        resnet34.relu,
-        resnet34.maxpool,
-        resnet34.layer1,
-        resnet34.layer2,
-        resnet34.layer3,
-    )
+            for layer in self._feature_extractors:
+                x = layer(x)
+                confidence, location = self._compute_header(header_index, x)
+                header_index += 1
+                confidences.append(confidence)
+                locations.append(location)
 
+            confidences = torch.cat(confidences, 1)
+            locations = torch.cat(locations, 1)
 
-def create_extra_conv1() -> nn.Module:
-    return nn.Sequential(
-        nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, stride=2, padding=1, bias=False),
-        nn.BatchNorm2d(num_features=512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True),
-        nn.ReLU(inplace=True),
-        nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, stride=1, padding=1, bias=False),
-        nn.BatchNorm2d(num_features=512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True),
-        nn.Conv2d(in_channels=256, out_channels=512, kernel_size=1, stride=2, bias=False),
-        nn.BatchNorm2d(num_features=512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True),
-    )
+            if self.is_test:
+                confidences = F.softmax(confidences, dim=2)
+                boxes = converters.locations_to_boxes(
+                    locations, self.priors, self.config.center_variance, self.config.size_variance
+                )
+                boxes = converters.xcycwha_to_xyxya(boxes)
+                return confidences, boxes
+            else:
+                return confidences, locations
 
+    def _compute_header(self, index, x):
+        confidence = self._classification_headers[index](x)
+        confidence = confidence.permute(0, 2, 3, 1).contiguous()
+        confidence = confidence.view(confidence.size(0), -1, self.num_classes)
 
-def create_extra_conv2() -> nn.Module:
-    return nn.Sequential(
-        nn.Conv2d(in_channels=512, out_channels=256, kernel_size=1, padding=0, stride=1),
-        nn.ReLU(inplace=True),
-        nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, padding=1, stride=2),
-        nn.ReLU(inplace=True),
-    )
+        location = self._regression_headers[index](x)
+        location = location.permute(0, 2, 3, 1).contiguous()
+        location = location.view(location.size(0), -1, 5)
 
-
-def create_extra_conv3() -> nn.Module:
-    return nn.Sequential(
-        nn.Conv2d(in_channels=512, out_channels=128, kernel_size=1, padding=0, stride=1),
-        nn.ReLU(inplace=True),
-        nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1, stride=2),
-        nn.ReLU(inplace=True),
-    )
-
-
-def side_conv(in_channels: int) -> nn.Conv2d:
-    return nn.Conv2d(in_channels, out_channels=24, kernel_size=3, padding=1, stride=1)
+        return confidence, location

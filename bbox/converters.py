@@ -13,3 +13,25 @@ def xyxy_to_xcycwh(boxes: torch.Tensor) -> torch.Tensor:
         (boxes[:, :2] + boxes[:, 2:]) / 2,
         boxes[:, 2:] - boxes[:, :2]
     ), boxes.dim() - 1)
+
+
+def xcycwha_to_xyxya(boxes: torch.Tensor) -> torch.Tensor:
+    return torch.cat([boxes[..., :2] - boxes[..., 2:4] / 2,
+                      boxes[..., :2] + boxes[..., 2:4] / 2,
+                      boxes[..., 4:],
+                      ], boxes.dim() - 1)
+
+
+def locations_to_boxes(locations, priors, center_variance, size_variance):
+    # priors can have one dimension less.
+    if priors.dim() + 1 == locations.dim():
+        priors = priors.unsqueeze(0)
+
+    locations[..., 4][locations[..., 4] > 1.0] = 1.00
+    locations[..., 4][locations[..., 4] < -1.0] = -1.00
+
+    return torch.cat([
+        locations[..., :2] * center_variance * priors[..., 2:4] + priors[..., :2],
+        torch.exp(locations[..., 2:4] * size_variance) * priors[..., 2:4],
+        torch.arctan(locations[..., 4:]) + priors[..., 4:],
+    ], dim=locations.dim() - 1)
