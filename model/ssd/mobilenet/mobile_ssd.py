@@ -1,6 +1,7 @@
-from torch.nn import Conv2d, Sequential, ModuleList, ReLU
+from torch.nn import Conv2d, Sequential, ModuleList, ReLU, Module
 
 from model.nn.mobile_net_v1 import MobileNetV1
+from model.ssd import Predictor
 from model.ssd.config import Config
 from model.ssd.ssd_network import SSDNetwork
 
@@ -77,3 +78,24 @@ def _create_config() -> Config:
         center_variance=0.1,
         size_variance=0.2,
     )
+
+
+#  todo make some predictor config ?
+def create_mobilenetv1_ssd_predictor(
+        net: Module,
+        transform,
+        nms_method=None,
+        iou_threshold=0.5,
+        candidate_size=200,
+        sigma=0.5,
+        device=None,
+):
+    predictor = Predictor(net=net,
+                          transform=transform,
+                          nms_method=nms_method,
+                          iou_threshold=iou_threshold,
+                          candidate_size=candidate_size,
+                          sigma=sigma,
+                          device=device,
+                        )
+    return predictor
