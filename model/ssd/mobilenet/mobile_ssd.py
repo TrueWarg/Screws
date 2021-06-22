@@ -1,6 +1,7 @@
 from torch.nn import Conv2d, Sequential, ModuleList, ReLU
 
 from model.nn.mobile_net_v1 import MobileNetV1
+from model.ssd.config import Config
 from model.ssd.ssd_network import SSDNetwork
 
 
@@ -15,7 +16,7 @@ def create_mobilenetv1_ssd(num_classes: int, is_test=False, device=None) -> SSDN
         source_layer_indexes=[12, 14],
         num_classes=num_classes,
         device=device,
-        config=None,
+        config=_create_config(),
         is_test=is_test
     )
 
@@ -69,3 +70,10 @@ def _create_regression_headers() -> ModuleList:
         Conv2d(in_channels=256, out_channels=6 * 5, kernel_size=3, padding=1),
         Conv2d(in_channels=256, out_channels=6 * 5, kernel_size=3, padding=1),
     ])
+
+
+def _create_config() -> Config:
+    return Config(
+        center_variance=0.1,
+        size_variance=0.2,
+    )
