@@ -22,6 +22,34 @@ class TrainTransform:
         return self._composed(img, boxes, labels)
 
 
+class TestTransform:
+    def __init__(self, size, mean=0.0, std=1.0):
+        self.transform = Compose([
+            ToPercentCoordinates(),
+            Resize(size),
+            SubtractMeans(mean),
+            lambda img, boxes=None, labels=None: (img / std, boxes, labels),
+            ToTensor(),
+        ])
+
+    def __call__(self, image, boxes, labels):
+        return self.transform(image, boxes, labels)
+
+
+class PredictionTransform:
+    def __init__(self, size, mean=0.0, std=1.0):
+        self.transform = Compose([
+            Resize(size),
+            SubtractMeans(mean),
+            lambda img, boxes=None, labels=None: (img / std, boxes, labels),
+            ToTensor()
+        ])
+
+    def __call__(self, image):
+        image, _, _ = self.transform(image)
+        return image
+
+
 class ToTensor(object):
     def __call__(self, cvimage, boxes=None, labels=None):
         return torch.from_numpy(cvimage.astype(np.float32)).permute(2, 0, 1), boxes, labels
