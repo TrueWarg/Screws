@@ -101,7 +101,7 @@ class SSDNetwork(nn.Module):
             if self.is_test:
                 confidences = F.softmax(confidences, dim=2)
                 boxes = converters.locations_to_boxes(
-                    locations, self.priors, self.config.center_variance, self.config.size_variance
+                    locations, self.priors, self.config._center_variance, self.config._size_variance
                 )
                 boxes = converters.xcycwha_to_xyxya(boxes)
                 return confidences, boxes
