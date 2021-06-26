@@ -11,8 +11,8 @@ import numpy as np
 class Config:
     root_path: str
     images_sets_relative_path: str
-    image_ids: Tuple
-    class_labels: Tuple
+    image_ids: List
+    class_labels: List
     difficult_only: bool
 
 
@@ -39,6 +39,7 @@ class VOCDataset(Dataset):
             boxes, labels = self._target_transform(boxes, labels)
         return image, boxes, labels
 
+    # todo move Annotation relative path to config?
     def _extract_annotations(self, image_id: str):
         annotation_path = os.path.join(self._root_path, f"Annotations/{image_id}.xml")
         objects = ET.parse(annotation_path).findall("object")
