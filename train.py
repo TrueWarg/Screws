@@ -2,6 +2,7 @@ import torch.optim as optim
 import torch
 import os
 
+from dataset.augmentation.transforms import TrainTransform
 from model.ssd.ssd_network import SSDNetwork
 from torchvision import models
 from torch import nn
@@ -31,7 +32,26 @@ def train_epoch(model: nn.Module, optimizer: optim.Optimizer, data_loader: DataL
     return model
 
 
+if __name__ == '__main__':
+    train_dataset_path = ''
+    validation_dataset_path = ''
+    images_path = ''
+    base_net_path = 'models/mobilenet_v1_with_relu_69_5.pth'
+    batch_size = 8
+    num_epochs = 300
+    lr = 0.01
+    config = ""
+    # train_transform = TrainTransform(config.image_size, config.image_mean, config.image_std)
+    # target_transform = MatchPrior(config.priors, config.center_variance,
+    #                               config.size_variance, 0.5)
+    #
+    # test_transform = TestTransform(config.image_size, config.image_mean, config.image_std)
+
+
 def train(args):
+    train_dataset_path = ''
+    validation_dataset_path = ''
+
     os.makedirs(f'{args.checkpoint_dir}', exist_ok=True)
 
     model = SSDNetwork(resnet34=models.resnet34(pretrained=True))

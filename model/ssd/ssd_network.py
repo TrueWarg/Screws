@@ -18,6 +18,7 @@ class SSDNetwork(nn.Module):
                  num_classes: int,
                  device,
                  config=None,
+                 priors=None,
                  is_test=None,
                  ):
         super(SSDNetwork, self).__init__()
@@ -32,9 +33,7 @@ class SSDNetwork(nn.Module):
         self._device = device
         self._config = config
         self._is_test = is_test
-
-        if is_test:
-            self._priors = config.priors.to(device)
+        self._priors = priors.to(device)
 
     def init_from_base_net(self, model):
         self._base_net.load_state_dict(torch.load(model, map_location=lambda storage, loc: storage), strict=True)
@@ -101,7 +100,7 @@ class SSDNetwork(nn.Module):
             if self.is_test:
                 confidences = F.softmax(confidences, dim=2)
                 boxes = converters.locations_to_boxes(
-                    locations, self.priors, self.config._center_variance, self.config._size_variance
+                    locations, self.priors, self._config._center_variance, self._config._size_variance
                 )
                 boxes = converters.xcycwha_to_xyxya(boxes)
                 return confidences, boxes

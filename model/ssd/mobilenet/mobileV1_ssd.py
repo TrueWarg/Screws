@@ -3,6 +3,7 @@ from torch.nn import Conv2d, Sequential, ModuleList, ReLU, Module
 from model.nn.mobile_net_v1 import MobileNetV1
 from model.ssd import Predictor
 from model.ssd.config import Config
+from model.ssd.mobilenet.mobileV1_ssd_config import config, priors
 from model.ssd.ssd_network import SSDNetwork
 
 
@@ -17,7 +18,8 @@ def create_mobilenetv1_ssd(num_classes: int, is_test=False, device=None) -> SSDN
         source_layer_indexes=[12, 14],
         num_classes=num_classes,
         device=device,
-        config=_create_config(),
+        config=config,
+        priors=priors,
         is_test=is_test
     )
 
@@ -73,13 +75,6 @@ def _create_regression_headers() -> ModuleList:
     ])
 
 
-def _create_config() -> Config:
-    return Config(
-        center_variance=0.1,
-        size_variance=0.2,
-    )
-
-
 #  todo make some predictor config ?
 def create_mobilenetv1_ssd_predictor(
         net: Module,
@@ -97,5 +92,5 @@ def create_mobilenetv1_ssd_predictor(
                           candidate_size=candidate_size,
                           sigma=sigma,
                           device=device,
-                        )
+                          )
     return predictor
