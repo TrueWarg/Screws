@@ -23,23 +23,22 @@ class SSDNetwork(nn.Module):
                  ):
         super(SSDNetwork, self).__init__()
 
-        self._num_classes = num_classes
-        self._base_net = base_net
-        self._feature_extractors = feature_extractors
-        self._classification_headers = classification_headers
-        self._regression_headers = regression_headers
-        self._source_layer_indexes = source_layer_indexes
-        self._num_classes = num_classes
-        self._device = device
-        self._config = config
-        self._is_test = is_test
-        self._priors = priors.to(device)
+        self.num_classes = num_classes
+        self.base_net = base_net
+        self.feature_extractors = feature_extractors
+        self.classification_headers = classification_headers
+        self.regression_headers = regression_headers
+        self.source_layer_indexes = source_layer_indexes
+        self.device = device
+        self.config = config
+        self.is_test = is_test
+        self.priors = priors.to(device)
 
     def init_from_base_net(self, model):
-        self._base_net.load_state_dict(torch.load(model, map_location=lambda storage, loc: storage), strict=True)
-        self._feature_extractors.apply(xavier_init)
-        self._classification_headers.apply(xavier_init)
-        self._regression_headers.apply(xavier_init)
+        self.base_net.load_state_dict(torch.load(model, map_location=lambda storage, loc: storage), strict=True)
+        self.feature_extractors.apply(xavier_init)
+        self.classification_headers.apply(xavier_init)
+        self.regression_headers.apply(xavier_init)
 
     def init_from_pretrained_ssd(self, model):
         state_dict = torch.load(model, map_location=lambda storage, loc: storage)
@@ -48,14 +47,14 @@ class SSDNetwork(nn.Module):
         model_dict = self.state_dict()
         model_dict.update(state_dict)
         self.load_state_dict(model_dict)
-        self._classification_headers.apply(xavier_init)
-        self._regression_headers.apply(xavier_init)
+        self.classification_headers.apply(xavier_init)
+        self.regression_headers.apply(xavier_init)
 
     def init_default(self):
-        self._base_net.apply(xavier_init)
-        self._feature_extractors.apply(xavier_init)
-        self._classification_headers.apply(xavier_init)
-        self._regression_headers.apply(xavier_init)
+        self.base_net.apply(xavier_init)
+        self.feature_extractors.apply(xavier_init)
+        self.classification_headers.apply(xavier_init)
+        self.regression_headers.apply(xavier_init)
 
     def forward(self, x: Tensor) -> Tuple[Tensor, Tensor]:
         confidences = []
@@ -63,14 +62,14 @@ class SSDNetwork(nn.Module):
         start_layer_index = 0
         header_index = 0
 
-        for end_layer_index in self._source_layer_indexes:
+        for end_layer_index in self.source_layer_indexes:
             if isinstance(end_layer_index, tuple):
                 added_layer = end_layer_index[1]
                 end_layer_index = end_layer_index[0]
             else:
                 added_layer = None
 
-            for layer in self._base_net[start_layer_index: end_layer_index]:
+            for layer in self.base_net[start_layer_index: end_layer_index]:
                 x = layer(x)
 
             if added_layer:
@@ -84,10 +83,10 @@ class SSDNetwork(nn.Module):
             confidences.append(confidence)
             locations.append(location)
 
-            for layer in self._base_net[end_layer_index:]:
+            for layer in self.base_net[end_layer_index:]:
                 x = layer(x)
 
-            for layer in self._feature_extractors:
+            for layer in self.feature_extractors:
                 x = layer(x)
                 confidence, location = self._compute_header(header_index, x)
                 header_index += 1
@@ -100,7 +99,7 @@ class SSDNetwork(nn.Module):
             if self.is_test:
                 confidences = F.softmax(confidences, dim=2)
                 boxes = converters.locations_to_boxes(
-                    locations, self.priors, self._config._center_variance, self._config._size_variance
+                    locations, self.priors, self.config._center_variance, self.config._size_variance
                 )
                 boxes = converters.xcycwha_to_xyxya(boxes)
                 return confidences, boxes
@@ -108,11 +107,11 @@ class SSDNetwork(nn.Module):
                 return confidences, locations
 
     def _compute_header(self, index, x):
-        confidence = self._classification_headers[index](x)
+        confidence = self.classification_headers[index](x)
         confidence = confidence.permute(0, 2, 3, 1).contiguous()
         confidence = confidence.view(confidence.size(0), -1, self.num_classes)
 
-        location = self._regression_headers[index](x)
+        location = self.regression_headers[index](x)
         location = location.permute(0, 2, 3, 1).contiguous()
         location = location.view(location.size(0), -1, 5)
 
