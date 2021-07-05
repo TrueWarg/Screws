@@ -6,7 +6,7 @@ import torch
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 
-from dataset.augmentation.transforms import TrainTransform, TestTransform
+from dataset.augmentation.transforms import TestTransform, TrainAugmentation
 from dataset.voc_dataset import VOCDataset, Config
 from model.ssd.box_losses import RotatedMultiboxLoss
 from model.ssd.mobilenet import mobileV1_ssd_config
@@ -14,7 +14,7 @@ from model.ssd.mobilenet.mobileV1_ssd import create_mobilenetv1_ssd
 from model.ssd.prior_matcher import RotatedPriorMatcher
 
 # todo refactor all training flow when working of it will be available
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 def train(loader, net, loss_function, optimizer, device, debug_steps=100, epoch=-1):
@@ -30,6 +30,7 @@ def train(loader, net, loss_function, optimizer, device, debug_steps=100, epoch=
 
         optimizer.zero_grad()
         confidence, locations = net(images)
+
         regression_loss, classification_loss = loss_function(confidence, locations, labels, boxes)
         loss = regression_loss + classification_loss
         loss.backward()
@@ -90,24 +91,24 @@ if __name__ == '__main__':
     train_images_path = "ImageSets/Main/trainval.txt"
     train_images_ids = _read_image_ids(os.path.join(train_dataset_path, train_images_path))
 
-    validation_dataset_path = '/home/truewarg/data/fake-test-3/VOC2007-fake/'
+    validation_dataset_path = '/home/truewarg/data/fake-test-3/VOC2007-fake-3/'
     validation_images_path = "ImageSets/Main/test.txt"
     validation_images_ids = _read_image_ids(os.path.join(validation_dataset_path, validation_images_path))
 
     base_net_path = 'models/mobilenet_v1_with_relu_69_5.pth'
     batch_size = 8
-    num_epochs = 300
+    num_epochs = 100
     lr = 0.01
     momentum = 0.9
     weight_decay = 5e-4
     t_max = 120
     checkpoint_path = ''
-    checkpoint_folder = '/models'
+    checkpoint_folder = 'checkpoint/'
 
-    config = mobileV1_ssd_config.config
+    config = mobileV1_ssd_config.CONFIG
     priors = mobileV1_ssd_config.priors
 
-    train_transform = TrainTransform(config.image_size, config.image_mean, config.image_std)
+    train_transform = TrainAugmentation(config.image_size, config.image_mean, config.image_std)
     target_transform = RotatedPriorMatcher(priors, config.center_variance, config.size_variance, 0.5)
     test_transform = TestTransform(config.image_size, config.image_mean, config.image_std)
 
@@ -116,7 +117,22 @@ if __name__ == '__main__':
         root_path=train_dataset_path,
         images_sets_relative_path=train_images_path,
         image_ids=train_images_ids,
-        class_labels=(),
+        # class_labels=('BACKGROUND',
+        #                         'type_001',
+        #                         'type_002',
+        #                         'type_003',
+        #                         'type_004',
+        #                         'type_005',
+        #                         'type_006',
+        #                         'type_007',
+        #                         'type_008',
+        #                         'type_009',
+        #                         'type_010',
+        #                         'type_011',
+        #                         'type_012',
+        #                         'type_013',
+        #                         ),
+        class_labels=('BACKGROUND', 'red', 'green', 'blue'),
         difficult_only=False
     )
     train_dataset = VOCDataset(train_dataset_config, transform=train_transform, target_transform=target_transform)
@@ -130,13 +146,29 @@ if __name__ == '__main__':
         root_path=validation_dataset_path,
         images_sets_relative_path=validation_images_path,
         image_ids=validation_images_ids,
-        class_labels=(),
+        # class_labels=('BACKGROUND',
+        #                         'type_001',
+        #                         'type_002',
+        #                         'type_003',
+        #                         'type_004',
+        #                         'type_005',
+        #                         'type_006',
+        #                         'type_007',
+        #                         'type_008',
+        #                         'type_009',
+        #                         'type_010',
+        #                         'type_011',
+        #                         'type_012',
+        #                         'type_013',
+        #                         ),
+        class_labels=('BACKGROUND', 'red', 'green', 'blue'),
         difficult_only=False
     )
 
     val_dataset = VOCDataset(train_dataset_config, transform=test_transform, target_transform=target_transform)
     val_loader = DataLoader(val_dataset, batch_size, num_workers=4, shuffle=False)
 
+    # net = create_mobilenetv1_ssd(num_classes, device=DEVICE)
     net = create_mobilenetv1_ssd(num_classes)
 
     params = [
@@ -152,26 +184,23 @@ if __name__ == '__main__':
     ]
 
     last_epoch = -1
-    net.to(device)
+    net.to(DEVICE)
 
     loss_function = RotatedMultiboxLoss(
-        priors, iou_threshold=0.5, neg_pos_ratio=3, center_variance=0.1, size_variance=0.2, device=device,
+        priors, iou_threshold=0.5, neg_pos_ratio=3, center_variance=0.1, size_variance=0.2, device=DEVICE,
     )
     optimizer = torch.optim.SGD(params, lr=lr, momentum=momentum, weight_decay=weight_decay)
     scheduler = CosineAnnealingLR(optimizer, t_max, last_epoch=last_epoch)
 
     for epoch in range(last_epoch + 1, num_epochs):
         scheduler.step()
-        train(train_loader, net, loss_function, optimizer, device=device, debug_steps=100, epoch=epoch)
+        train(train_loader, net, loss_function, optimizer, device=DEVICE, debug_steps=100, epoch=epoch)
         if epoch % 10 == 0:
-            print(f"epoch = {epoch}")
-            val_loss, val_regression_loss, val_classification_loss = test(val_loader, net, loss_function, device)
-            logging.info(
-                f"Epoch: {epoch}, " +
-                f"Validation Loss: {val_loss:.8f}, " +
-                f"Validation Regression Loss {val_regression_loss:.8f}, " +
-                f"Validation Classification Loss: {val_classification_loss:.8f}"
-            )
+            print(f"epoch! = {epoch}")
+            val_loss, val_regression_loss, val_classification_loss = test(val_loader, net, loss_function, DEVICE)
+            print(f"Validation Loss: {val_loss:.8f}, ")
+            print(f"Validation Regression Loss {val_regression_loss:.8f}, " )
+            print(f"Validation Classification Loss: {val_classification_loss:.8f}")
             model_path = os.path.join(checkpoint_folder, f"mobilev1-ssd-Epoch-{epoch}-Loss-{val_loss}.pth")
             net.save(model_path)
             logging.info(f"Saved model {model_path}")

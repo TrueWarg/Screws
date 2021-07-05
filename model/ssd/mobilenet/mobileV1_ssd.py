@@ -1,26 +1,60 @@
-from torch.nn import Conv2d, Sequential, ModuleList, ReLU, Module
+from torch import nn
+from torch.nn import Conv2d, Sequential, ModuleList, ReLU
 
-from model.nn.mobile_net_v1 import MobileNetV1
-from model.ssd import Predictor
-from model.ssd.config import Config
-from model.ssd.mobilenet.mobileV1_ssd_config import config, priors
-from model.ssd.ssd_network import SSDNetwork
+from model.ssd.mobilenet.mobileV1_ssd_config import CONFIG
+from model.ssd.ssd import SSD
 
 
-def create_mobilenetv1_ssd(num_classes: int, is_test=False, device=None) -> SSDNetwork:
-    base_net = MobileNetV1().conv
-
-    return SSDNetwork(
-        base_net=base_net,
-        feature_extractors=_create_feature_extraction_layers(),
+def create_mobilenetv1_ssd(num_classes, is_test=False):
+    return SSD(
+        num_classes=num_classes,
+        base_net=_create_base_net(),
+        source_layer_indexes=[12, 14],
+        extras=_create_feature_extraction_layers(),
         classification_headers=_create_classification_headers(num_classes),
         regression_headers=_create_regression_headers(),
-        source_layer_indexes=[12, 14],
-        num_classes=num_classes,
-        device=device,
-        config=config,
-        priors=priors,
-        is_test=is_test
+        is_test=is_test,
+        config=CONFIG
+    )
+
+
+def _create_base_net() -> Sequential:
+    return Sequential(
+        _conv_bn(3, 32, 2),
+        _conv_dw(32, 64, 1),
+        _conv_dw(64, 128, 2),
+        _conv_dw(128, 128, 1),
+        _conv_dw(128, 256, 2),
+        _conv_dw(256, 256, 1),
+        _conv_dw(256, 512, 2),
+        _conv_dw(512, 512, 1),
+        _conv_dw(512, 512, 1),
+        _conv_dw(512, 512, 1),
+        _conv_dw(512, 512, 1),
+        _conv_dw(512, 512, 1),
+        _conv_dw(512, 1024, 2),
+        _conv_dw(1024, 1024, 1),
+    )
+
+
+def _conv_bn(in_channels: int, out_channels: int, stride: int):
+    return nn.Sequential(
+        nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False),
+        nn.BatchNorm2d(out_channels),
+        nn.ReLU(inplace=True)
+    )
+
+
+def _conv_dw(in_channels: int, out_channels: int, stride: int):
+    return nn.Sequential(
+        nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=stride, padding=1, groups=in_channels,
+                  bias=False),
+        nn.BatchNorm2d(in_channels),
+        nn.ReLU(inplace=True),
+
+        nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False),
+        nn.BatchNorm2d(out_channels),
+        nn.ReLU(inplace=True),
     )
 
 
@@ -53,17 +87,6 @@ def _create_feature_extraction_layers() -> ModuleList:
     ])
 
 
-def _create_classification_headers(num_classes: int) -> ModuleList:
-    return ModuleList([
-        Conv2d(in_channels=512, out_channels=6 * num_classes, kernel_size=3, padding=1),
-        Conv2d(in_channels=1024, out_channels=6 * num_classes, kernel_size=3, padding=1),
-        Conv2d(in_channels=512, out_channels=6 * num_classes, kernel_size=3, padding=1),
-        Conv2d(in_channels=256, out_channels=6 * num_classes, kernel_size=3, padding=1),
-        Conv2d(in_channels=256, out_channels=6 * num_classes, kernel_size=3, padding=1),
-        Conv2d(in_channels=256, out_channels=6 * num_classes, kernel_size=3, padding=1),
-    ])
-
-
 def _create_regression_headers() -> ModuleList:
     return ModuleList([
         Conv2d(in_channels=512, out_channels=6 * 5, kernel_size=3, padding=1),
@@ -75,22 +98,12 @@ def _create_regression_headers() -> ModuleList:
     ])
 
 
-#  todo make some predictor config ?
-def create_mobilenetv1_ssd_predictor(
-        net: Module,
-        transform,
-        nms_method=None,
-        iou_threshold=0.5,
-        candidate_size=200,
-        sigma=0.5,
-        device=None,
-):
-    predictor = Predictor(net=net,
-                          transform=transform,
-                          nms_method=nms_method,
-                          iou_threshold=iou_threshold,
-                          candidate_size=candidate_size,
-                          sigma=sigma,
-                          device=device,
-                          )
-    return predictor
+def _create_classification_headers(num_classes: int) -> ModuleList:
+    return ModuleList([
+        Conv2d(in_channels=512, out_channels=6 * num_classes, kernel_size=3, padding=1),
+        Conv2d(in_channels=1024, out_channels=6 * num_classes, kernel_size=3, padding=1),
+        Conv2d(in_channels=512, out_channels=6 * num_classes, kernel_size=3, padding=1),
+        Conv2d(in_channels=256, out_channels=6 * num_classes, kernel_size=3, padding=1),
+        Conv2d(in_channels=256, out_channels=6 * num_classes, kernel_size=3, padding=1),
+        Conv2d(in_channels=256, out_channels=6 * num_classes, kernel_size=3, padding=1),
+    ])

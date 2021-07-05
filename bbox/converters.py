@@ -3,8 +3,8 @@ import torch
 
 def xcycwh_to_xyxy(boxes: torch.Tensor) -> torch.Tensor:
     return torch.cat((
-        boxes[:, :2] - boxes[:, 2:] / 2,
-        boxes[:, :2] + boxes[:, 2:] / 2
+        boxes[..., :2] - boxes[..., 2:] / 2,
+        boxes[..., :2] + boxes[..., 2:] / 2
     ), boxes.dim() - 1)
 
 
@@ -47,3 +47,18 @@ def convert_boxes_to_locations(center_form_boxes, center_form_priors, center_var
         torch.log(center_form_boxes[..., 2:4] / center_form_priors[..., 2:4]) / size_variance,
         torch.tan(center_form_boxes[..., 4:] - center_form_priors[..., 4:]),
     ], dim=center_form_boxes.dim() - 1)
+
+
+def center_form_to_corner_form(locations):
+    return torch.cat([locations[..., :2] - locations[..., 2:4] / 2,
+                      locations[..., :2] + locations[..., 2:4] / 2,
+                      locations[..., 4:],
+                      ], locations.dim() - 1)
+
+
+def corner_form_to_center_form(boxes):
+    return torch.cat([
+        (boxes[..., :2] + boxes[..., 2:4]) / 2,
+        boxes[..., 2:4] - boxes[..., :2],
+        boxes[..., 4:],
+    ], boxes.dim() - 1)
