@@ -1,69 +1,42 @@
 from collections import namedtuple
 from typing import List, Tuple
+import torch.nn.functional as F
 
 import torch
-import torch.nn.functional as F
-from torch import nn, Tensor
+from torch import nn
 
 from bbox import converters
-from model.ssd.initializers import xavier_init
 
-GraphPath = namedtuple("GraphPath", ['s0', 'name', 's1'])
+GraphPath = namedtuple("GraphPath", ['s0', 'name', 's1'])  #
 
 
-class SSDNetwork(nn.Module):
-    def __init__(self,
-                 base_net: nn.ModuleList,
-                 feature_extractors: nn.ModuleList,
-                 classification_headers: nn.ModuleList,
-                 regression_headers: nn.ModuleList,
-                 source_layer_indexes: List[int],
-                 num_classes: int,
-                 device,
-                 config=None,
-                 priors=None,
-                 is_test=None,
-                 ):
-        super(SSDNetwork, self).__init__()
+class SSD(nn.Module):
+    def __init__(self, num_classes: int, base_net: nn.Module, source_layer_indexes: List[int],
+                 extras: nn.ModuleList, classification_headers: nn.ModuleList,
+                 regression_headers: nn.ModuleList, is_test=False, config=None, device=None):
+        """Compose a SSD model using the given components.
+        """
+        super(SSD, self).__init__()
 
         self.num_classes = num_classes
         self.base_net = base_net
-        self.extras = feature_extractors
+        self.source_layer_indexes = source_layer_indexes
+        self.extras = extras
         self.classification_headers = classification_headers
         self.regression_headers = regression_headers
-        self.source_layer_indexes = source_layer_indexes
-        self.device = device
-        self.config = config
         self.is_test = is_test
-        self.priors = priors.to(device)
+        self.config = config
 
         # register layers in source_layer_indexes by adding them to a module list
         self.source_layer_add_ons = nn.ModuleList([t[1] for t in source_layer_indexes
                                                    if isinstance(t, tuple) and not isinstance(t, GraphPath)])
-
-    def init_from_base_net(self, model):
-        self.base_net.load_state_dict(torch.load(model, map_location=lambda storage, loc: storage), strict=True)
-        self.feature_extractors.apply(xavier_init)
-        self.source_layer_add_ons.apply(xavier_init)
-        self.classification_headers.apply(xavier_init)
-        self.regression_headers.apply(xavier_init)
-
-    def init_from_pretrained_ssd(self, model):
-        state_dict = torch.load(model, map_location=lambda storage, loc: storage)
-        state_dict = {k: v for k, v in state_dict.items() if
-                      not (k.startswith("classification_headers") or k.startswith("regression_headers"))}
-        model_dict = self.state_dict()
-        model_dict.update(state_dict)
-        self.load_state_dict(model_dict)
-        self.classification_headers.apply(xavier_init)
-        self.regression_headers.apply(xavier_init)
-
-    def init_default(self):
-        self.base_net.apply(xavier_init)
-        self.feature_extractors.apply(xavier_init)
-        self.source_layer_add_ons.apply(xavier_init)
-        self.classification_headers.apply(xavier_init)
-        self.regression_headers.apply(xavier_init)
+        if device:
+            self.device = device
+        else:
+            self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        if is_test:
+            self.config = config
+            self.priors = config.priors.to(self.device)
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         confidences = []
@@ -97,7 +70,7 @@ class SSDNetwork(nn.Module):
                     x = layer(x)
                 end_layer_index += 1
             start_layer_index = end_layer_index
-            confidence, location = self._compute_header(header_index, y)
+            confidence, location = self.compute_header(header_index, y)
             header_index += 1
             confidences.append(confidence)
             locations.append(location)
@@ -107,7 +80,7 @@ class SSDNetwork(nn.Module):
 
         for layer in self.extras:
             x = layer(x)
-            confidence, location = self._compute_header(header_index, x)
+            confidence, location = self.compute_header(header_index, x)
             header_index += 1
             confidences.append(confidence)
             locations.append(location)
@@ -125,16 +98,48 @@ class SSDNetwork(nn.Module):
         else:
             return confidences, locations
 
-    def _compute_header(self, index, x):
-        confidence = self.classification_headers[index](x)
+    def compute_header(self, i, x):
+        confidence = self.classification_headers[i](x)
         confidence = confidence.permute(0, 2, 3, 1).contiguous()
         confidence = confidence.view(confidence.size(0), -1, self.num_classes)
 
-        location = self.regression_headers[index](x)
+        location = self.regression_headers[i](x)
         location = location.permute(0, 2, 3, 1).contiguous()
         location = location.view(location.size(0), -1, 5)
 
         return confidence, location
 
+    def init_from_base_net(self, model):
+        self.base_net.load_state_dict(torch.load(model, map_location=lambda storage, loc: storage), strict=True)
+        self.source_layer_add_ons.apply(_xavier_init_)
+        self.extras.apply(_xavier_init_)
+        self.classification_headers.apply(_xavier_init_)
+        self.regression_headers.apply(_xavier_init_)
+
+    def init_from_pretrained_ssd(self, model):
+        state_dict = torch.load(model, map_location=lambda storage, loc: storage)
+        state_dict = {k: v for k, v in state_dict.items() if
+                      not (k.startswith("classification_headers") or k.startswith("regression_headers"))}
+        model_dict = self.state_dict()
+        model_dict.update(state_dict)
+        self.load_state_dict(model_dict)
+        self.classification_headers.apply(_xavier_init_)
+        self.regression_headers.apply(_xavier_init_)
+
+    def init(self):
+        self.base_net.apply(_xavier_init_)
+        self.source_layer_add_ons.apply(_xavier_init_)
+        self.extras.apply(_xavier_init_)
+        self.classification_headers.apply(_xavier_init_)
+        self.regression_headers.apply(_xavier_init_)
+
+    def load(self, model):
+        self.load_state_dict(torch.load(model, map_location=lambda storage, loc: storage))
+
     def save(self, model_path):
         torch.save(self.state_dict(), model_path)
+
+
+def _xavier_init_(m: nn.Module):
+    if isinstance(m, nn.Conv2d):
+        nn.init.xavier_uniform_(m.weight)

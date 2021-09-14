@@ -1,10 +1,11 @@
 import os
-from typing import Tuple, List
-from dataclasses import dataclass
-import cv2
 import xml.etree.ElementTree as ET
-from torch.utils.data import Dataset
+from dataclasses import dataclass
+from typing import Tuple, List
+
+import cv2
 import numpy as np
+from torch.utils.data import Dataset
 
 
 @dataclass()
@@ -12,7 +13,7 @@ class Config:
     root_path: str
     images_sets_relative_path: str
     image_ids: List
-    class_labels: List
+    class_labels: Tuple
     difficult_only: bool
 
 
@@ -22,17 +23,15 @@ class VOCDataset(Dataset):
         self._root_path = config.root_path
         self._transform = transform
         self._target_transform = target_transform
-        self._images_sets_path = os.path.join(config.root_path, config.images_sets_relative_path)
         self._classes = {class_label: i for i, class_label in enumerate(config.class_labels)}
 
     def __getitem__(self, index: int):
         image_id = self._config.image_ids[index]
         boxes, labels, is_difficult = self._extract_annotations(image_id)
-        if self._config.difficult_only:
+        if not self._config.difficult_only:
             boxes = boxes[is_difficult == 0]
             labels = labels[is_difficult == 0]
         image = self._read_image(image_id)
-
         if self._transform:
             image, boxes, labels = self._transform(image, boxes, labels)
         if self._target_transform:
@@ -51,7 +50,7 @@ class VOCDataset(Dataset):
             class_name = object.find('name').text.lower().strip()
             bbox = self._extract_bbox(object)
             boxes.append(bbox)
-            labels.append(self.class_dict[class_name])
+            labels.append(self._classes[class_name])
             is_difficult_str = object.find('difficult').text
             is_difficult.append(int(is_difficult_str) if is_difficult_str else 0)
 
@@ -72,7 +71,7 @@ class VOCDataset(Dataset):
         return [x1, y1, x2, y2, angle]
 
     def _read_image(self, image_id: str) -> np.ndarray:
-        image_path = os.path.join(self._root_path, f"JPEGImages/{image_id}.jpg")
+        image_path = os.path.join(self._root_path, f"JPEGImages/{image_id}.png")
         image = cv2.imread(image_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         return image

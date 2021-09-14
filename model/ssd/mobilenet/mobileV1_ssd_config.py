@@ -3,7 +3,7 @@ import numpy as np
 from model.ssd.config import Config
 from model.ssd.prior_generators import SsdBoxGenParams, generate_ssd_priors
 
-config = Config(
+CONFIG = Config(
     image_size=300,
     image_mean=np.array([127, 127, 127]),
     image_std=128.0,
@@ -27,4 +27,4 @@ specs = [
                     aspect_ratios=[4]),
 ]
 
-priors = generate_ssd_priors(specs, config.image_size)
+priors = generate_ssd_priors(specs, CONFIG.image_size)
