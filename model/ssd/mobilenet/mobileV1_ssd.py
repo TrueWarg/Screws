@@ -1,11 +1,14 @@
+import numpy as np
 from torch import nn
 from torch.nn import Conv2d, Sequential, ModuleList, ReLU
 
+from dataset.augmentation.transforms import PredictionTransform
 from model.ssd.mobilenet.mobileV1_ssd_config import CONFIG
+from model.ssd.predictor import Predictor
 from model.ssd.ssd import SSD
 
 
-def create_mobilenetv1_ssd(num_classes, is_test=False):
+def create_mobilenetv1_ssd(num_classes, is_test=False, priors=None):
     return SSD(
         num_classes=num_classes,
         base_net=_create_base_net(),
@@ -14,7 +17,8 @@ def create_mobilenetv1_ssd(num_classes, is_test=False):
         classification_headers=_create_classification_headers(num_classes),
         regression_headers=_create_regression_headers(),
         is_test=is_test,
-        config=CONFIG
+        config=CONFIG,
+        priors=priors,
     )
 
 

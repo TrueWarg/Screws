@@ -1,53 +1,66 @@
 import torch
 from torch import nn
 
+from bbox.metrics import iou
+from bbox.nms import hard_nms
+from dataset.augmentation.transforms import PredictionTransform
+
 
 class Predictor:
     def __init__(self,
                  net: nn.Module,
-                 transform,
-                 nms_method=None,
+                 transform=None,
                  iou_threshold=0.45,
-                 filter_threshold=0.01,
+                 filter_threshold=0.4,
                  candidate_size=200,
-                 sigma=0.5,
                  device=None
-    ):
-        self.net = net
-        self.transform = transform
-        self.iou_threshold = iou_threshold
-        self.filter_threshold = filter_threshold
-        self.candidate_size = candidate_size
-        self.nms_method = nms_method
-        self.sigma = sigma
-        self.device = device
-        # make eval and to device extra?
-        self.net.to(self.device)
-        self.net.eval()
+                 ):
+        self._net = net
+        self._transform = transform
+        self._iou_threshold = iou_threshold
+        self._filter_threshold = filter_threshold
+        self._candidate_size = candidate_size
+        self._device = device
 
-    def predict(self, image):
+        if device:
+            self._net.to(device)
+            self._net.eval()
+
+    def predict(self, image, top_k=-1, prob_threshold=None):
+        cpu_device = torch.device("cpu")
         height, width, _ = image.shape
-        image = self.transform(image)
+        image = self._transform(image)
         images = image.unsqueeze(0)
-        images = images.to(self.device)
+        images = images.to(self._device)
         with torch.no_grad():
-            scores, boxes = self.net.forward(images)
-
-        scores = scores[0]
+            scores, boxes = self._net.forward(images)
         boxes = boxes[0]
-
+        scores = scores[0]
+        if not prob_threshold:
+            prob_threshold = self._filter_threshold
+        # this version of nms is slower on GPU, so we move data to CPU.
+        boxes = boxes.to(cpu_device)
+        scores = scores.to(cpu_device)
         picked_box_probs = []
         picked_labels = []
+
         for class_index in range(1, scores.size(1)):
             probs = scores[:, class_index]
-            mask = probs > self.filter_threshold
-
+            mask = probs > prob_threshold
+            print(f" probs {probs.max()}")
             probs = probs[mask]
+
             if probs.size(0) == 0:
                 continue
+
             subset_boxes = boxes[mask, :]
             box_probs = torch.cat([subset_boxes, probs.reshape(-1, 1)], dim=1)
-            # box_probs = todo apply nms method
+            box_probs = hard_nms(
+                box_scores=box_probs,
+                iou_threshold=self._iou_threshold,
+                top_k=top_k,
+                candidate_size=self._candidate_size
+            )
             picked_box_probs.append(box_probs)
             picked_labels.extend([class_index] * box_probs.size(0))
 
