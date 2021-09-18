@@ -142,7 +142,7 @@ if __name__ == '__main__':
     train_loader = DataLoader(train_dataset, batch_size, num_workers=4, shuffle=True)
 
     # todo add label file
-    train_dataset_config = Config(
+    validation_dataset_config = Config(
         root_path=validation_dataset_path,
         images_sets_relative_path=validation_images_path,
         image_ids=validation_images_ids,
@@ -165,7 +165,7 @@ if __name__ == '__main__':
         difficult_only=False
     )
 
-    val_dataset = VOCDataset(train_dataset_config, transform=test_transform, target_transform=target_transform)
+    val_dataset = VOCDataset(validation_dataset_config, transform=test_transform, target_transform=target_transform)
     val_loader = DataLoader(val_dataset, batch_size, num_workers=4, shuffle=False)
 
     # net = create_mobilenetv1_ssd(num_classes, device=DEVICE)

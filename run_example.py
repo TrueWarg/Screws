@@ -14,7 +14,7 @@ from train import DEVICE
 
 def demo():
     model_path = 'checkpoint/mobilev1-ssd-Epoch-90-Loss-1.5891754905382791.pth'
-    image_path = '/home/truewarg/data/fake-test-3/VOC2007-fake-3/JPEGImages/image_1.png'
+    image_path = '/home/truewarg/data/fake-test-3/VOC2007-fake-3/JPEGImages/image_0.png'
 
     class_labels = ('BACKGROUND', 'red', 'green', 'blue')
 
@@ -25,12 +25,12 @@ def demo():
         transform=PredictionTransform(CONFIG.image_size, CONFIG.image_mean, CONFIG.image_std),
         iou_threshold=CONFIG.iou_threshold,
         candidate_size=200,
-        device=DEVICE
+        device=DEVICE,
     )
 
     orig_image = cv2.imread(image_path)
     image = cv2.cvtColor(orig_image, cv2.COLOR_BGR2RGB)
-    boxes, labels, probs = predictor.predict(image, 10, 0.4)
+    boxes, labels, probs = predictor.predict(image, 10)
 
     for i in range(boxes.size(0)):
         box = boxes[i, :]
