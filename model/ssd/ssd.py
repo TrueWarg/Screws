@@ -11,9 +11,19 @@ GraphPath = namedtuple("GraphPath", ['s0', 'name', 's1'])  #
 
 
 class SSD(nn.Module):
-    def __init__(self, num_classes: int, base_net: nn.Module, source_layer_indexes: List[int],
-                 extras: nn.ModuleList, classification_headers: nn.ModuleList,
-                 regression_headers: nn.ModuleList, is_test=False, config=None, device=None):
+    def __init__(self,
+                 num_classes: int,
+                 base_net: nn.Module,
+                 source_layer_indexes: List[int],
+                 extras: nn.ModuleList,
+                 classification_headers: nn.ModuleList,
+                 regression_headers: nn.ModuleList,
+                 # separate test and no test mode, remove config
+                 is_test=False,
+                 config=None,
+                 device=None,
+                 priors=None,
+        ):
         """Compose a SSD model using the given components.
         """
         super(SSD, self).__init__()
@@ -36,7 +46,7 @@ class SSD(nn.Module):
             self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         if is_test:
             self.config = config
-            self.priors = config.priors.to(self.device)
+            self.priors = priors
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         confidences = []
@@ -91,7 +101,7 @@ class SSD(nn.Module):
         if self.is_test:
             confidences = F.softmax(confidences, dim=2)
             boxes = converters.locations_to_boxes(
-                locations, self.priors, self.config._center_variance, self.config._size_variance
+                locations, self.priors, self.config.center_variance, self.config.size_variance
             )
             boxes = converters.xcycwha_to_xyxya(boxes)
             return confidences, boxes

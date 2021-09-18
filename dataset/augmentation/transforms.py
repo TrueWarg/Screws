@@ -55,7 +55,7 @@ class TestTransform:
 
 
 class PredictionTransform:
-    def __init__(self, size, mean=0.0, std=1.0):
+    def __init__(self, size, mean, std):
         self.transform = Compose([
             Resize(size),
             SubtractMeans(mean),
