@@ -1,9 +1,7 @@
 import torch
 from torch import nn
 
-from bbox.metrics import iou
 from bbox.nms import hard_nms
-from dataset.augmentation.transforms import PredictionTransform
 
 
 class Predictor:
@@ -26,7 +24,7 @@ class Predictor:
             self._net.to(device)
             self._net.eval()
 
-    def predict(self, image, top_k=-1, prob_threshold=None):
+    def predict(self, image, top_k=-1):
         cpu_device = torch.device("cpu")
         height, width, _ = image.shape
         image = self._transform(image)
@@ -36,9 +34,6 @@ class Predictor:
             scores, boxes = self._net.forward(images)
         boxes = boxes[0]
         scores = scores[0]
-        if not prob_threshold:
-            prob_threshold = self._filter_threshold
-        # this version of nms is slower on GPU, so we move data to CPU.
         boxes = boxes.to(cpu_device)
         scores = scores.to(cpu_device)
         picked_box_probs = []
@@ -46,7 +41,7 @@ class Predictor:
 
         for class_index in range(1, scores.size(1)):
             probs = scores[:, class_index]
-            mask = probs > prob_threshold
+            mask = probs > self._filter_threshold
             print(f" probs {probs.max()}")
             probs = probs[mask]
 

@@ -76,5 +76,16 @@ class VOCDataset(Dataset):
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         return image
 
+    def get_image(self, index: int):
+        image_id = self._config.image_ids[index]
+        image = self._read_image(image_id)
+        if self._transform:
+            image, _ = self._transform(image)
+        return image
+
+    def get_annotation(self, index):
+        image_id = self._config.image_ids[index]
+        return image_id, self._extract_annotations(image_id)
+
     def __len__(self):
         return len(self._config.image_ids)
