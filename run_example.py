@@ -13,8 +13,8 @@ from train import DEVICE
 
 
 def demo():
-    model_path = 'checkpoint/mobilev1-ssd-Epoch-90-Loss-1.5891754905382791.pth'
-    image_path = '/home/truewarg/data/fake-test-3/VOC2007-fake-3/JPEGImages/image_0.png'
+    model_path = 'checkpoint/mobilev1-ssd-Epoch-90-Loss-1.1465726057688395.pth'
+    image_path = '/home/truewarg/data/fake-test-3/VOC2007-fake-3/JPEGImages/image_50.png'
 
     class_labels = ('BACKGROUND', 'red', 'green', 'blue')
 

@@ -1,182 +1,130 @@
 import itertools
-import logging
+import json
 import os
+from dataclasses import dataclass
 
 import torch
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 
+from fitter import Fitter
 from dataset.augmentation.transforms import TestTransform, TrainAugmentation
 from dataset.voc_dataset import VOCDataset, Config
 from model.ssd.box_losses import RotatedMultiboxLoss
 from model.ssd.mobilenet import mobileV1_ssd_config
 from model.ssd.mobilenet.mobileV1_ssd import create_mobilenetv1_ssd
 from model.ssd.prior_matcher import RotatedPriorMatcher
+from typing import List
 
-# todo refactor all training flow when working of it will be available
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+BACKGROUND_CLASS = 'BACKGROUND'
 
 
-def train(loader, net, loss_function, optimizer, device, debug_steps=100, epoch=-1):
-    net.train(True)
-    running_loss = 0.0
-    running_regression_loss = 0.0
-    running_classification_loss = 0.0
-    for i, data in enumerate(loader):
-        images, boxes, labels = data
-        images = images.to(device)
-        boxes = boxes.to(device)
-        labels = labels.to(device)
-
-        optimizer.zero_grad()
-        confidence, locations = net(images)
-
-        regression_loss, classification_loss = loss_function(confidence, locations, labels, boxes)
-        loss = regression_loss + classification_loss
-        loss.backward()
-        optimizer.step()
-
-        running_loss += loss.item()
-        running_regression_loss += regression_loss.item()
-        running_classification_loss += classification_loss.item()
-        if i and i % debug_steps == 0:
-            avg_loss = running_loss / debug_steps
-            avg_reg_loss = running_regression_loss / debug_steps
-            avg_clf_loss = running_classification_loss / debug_steps
-            logging.info(
-                f"Epoch: {epoch}, Step: {i}, " +
-                f"Average Loss: {avg_loss:.4f}, " +
-                f"Average Regression Loss {avg_reg_loss:.4f}, " +
-                f"Average Classification Loss: {avg_clf_loss:.4f}"
-            )
-            running_loss = 0.0
-            running_regression_loss = 0.0
-            running_classification_loss = 0.0
-
-
-def test(loader, net, loss_function, device):
-    net.eval()
-    running_loss = 0.0
-    running_regression_loss = 0.0
-    running_classification_loss = 0.0
-    num = 0
-    for _, data in enumerate(loader):
-        images, boxes, labels = data
-        images = images.to(device)
-        boxes = boxes.to(device)
-        labels = labels.to(device)
-        num += 1
-
-        with torch.no_grad():
-            confidence, locations = net(images)
-            regression_loss, classification_loss = loss_function(confidence, locations, labels, boxes)
-            loss = regression_loss + classification_loss
-
-        running_loss += loss.item()
-        running_regression_loss += regression_loss.item()
-        running_classification_loss += classification_loss.item()
-    return running_loss / num, running_regression_loss / num, running_classification_loss / num
-
-
-def _read_image_ids(image_sets_file):
+def _read_image_ids(image_sets_path) -> List:
     ids = []
-    with open(image_sets_file) as f:
+    with open(image_sets_path) as f:
         for line in f:
             ids.append(line.rstrip())
     return ids
 
 
+def _read_class_label(labels_path) -> List:
+    labels = []
+    with open(labels_path) as f:
+        for line in f:
+            labels.append(line.rstrip())
+    return labels
+
+
+@dataclass()
+class TrainConfig:
+    train_dataset_path: str
+    train_image_ids_path: str
+    validation_dataset_path: str
+    validation_image_ids_path: str
+    labels_file: str
+    base_net_path: str
+    checkpoint_folder_path: str
+    batch_size: int
+    num_epochs: int
+    lr: float
+    momentum: float
+    weight_decay: float
+    t_max: int
+    validation_step: int
+
+
+# add default value on error?
+def _read_config() -> TrainConfig:
+    with open("train_config.json") as f:
+        config_items = json.load(f)
+
+    return TrainConfig(
+        train_dataset_path=config_items['train_dataset_path'],
+        train_image_ids_path=config_items['train_image_ids_path'],
+        validation_dataset_path=config_items['validation_dataset_path'],
+        validation_image_ids_path=config_items['validation_image_ids_path'],
+        labels_file=config_items['labels_file'],
+        base_net_path=config_items['base_net_path'],
+        checkpoint_folder_path=config_items['checkpoint_folder_path'],
+        batch_size=config_items['batch_size'],
+        num_epochs=config_items['num_epochs'],
+        lr=config_items['lr'],
+        momentum=config_items['momentum'],
+        weight_decay=config_items['weight_decay'],
+        t_max=config_items['t_max'],
+        validation_step=config_items['validation_step'],
+    )
+
+
 if __name__ == '__main__':
-    train_dataset_path = '/home/truewarg/data/VOC2007-fake-3/'
-    train_images_path = "ImageSets/Main/trainval.txt"
-    train_images_ids = _read_image_ids(os.path.join(train_dataset_path, train_images_path))
+    train_config = _read_config()
 
-    validation_dataset_path = '/home/truewarg/data/fake-test-3/VOC2007-fake-3/'
-    validation_images_path = "ImageSets/Main/test.txt"
-    validation_images_ids = _read_image_ids(os.path.join(validation_dataset_path, validation_images_path))
+    train_images_ids = _read_image_ids(
+        os.path.join(train_config.train_dataset_path, train_config.train_image_ids_path))
 
-    base_net_path = 'models/mobilenet_v1_with_relu_69_5.pth'
-    batch_size = 8
-    num_epochs = 100
-    lr = 0.01
-    momentum = 0.9
-    weight_decay = 5e-4
-    t_max = 120
-    checkpoint_path = ''
-    checkpoint_folder = 'checkpoint/'
+    validation_images_ids = _read_image_ids(
+        os.path.join(train_config.validation_dataset_path, train_config.validation_image_ids_path))
 
     config = mobileV1_ssd_config.CONFIG
     priors = mobileV1_ssd_config.priors
 
     train_transform = TrainAugmentation(config.image_size, config.image_mean, config.image_std)
-    target_transform = RotatedPriorMatcher(priors, config.center_variance, config.size_variance, 0.5)
+    target_transform = RotatedPriorMatcher(priors, config.center_variance, config.size_variance, iou_threshold=0.5)
     test_transform = TestTransform(config.image_size, config.image_mean, config.image_std)
 
-    # todo add label file
+    class_labels = _read_class_label(train_config.labels_file)
+    class_labels.insert(0, BACKGROUND_CLASS)
+    num_classes = len(class_labels)
+
     train_dataset_config = Config(
-        root_path=train_dataset_path,
-        images_sets_relative_path=train_images_path,
+        root_path=train_config.train_dataset_path,
         image_ids=train_images_ids,
-        # class_labels=('BACKGROUND',
-        #                         'type_001',
-        #                         'type_002',
-        #                         'type_003',
-        #                         'type_004',
-        #                         'type_005',
-        #                         'type_006',
-        #                         'type_007',
-        #                         'type_008',
-        #                         'type_009',
-        #                         'type_010',
-        #                         'type_011',
-        #                         'type_012',
-        #                         'type_013',
-        #                         ),
-        class_labels=('BACKGROUND', 'red', 'green', 'blue'),
+        class_labels=tuple(class_labels),
         difficult_only=False
     )
-    train_dataset = VOCDataset(train_dataset_config, transform=train_transform, target_transform=target_transform)
-    label_file = os.path.join(checkpoint_path, "voc-model-labels.txt")
-    # store_labels(label_file, train_dataset_config.class_labels)
-    num_classes = len(train_dataset_config.class_labels)
-    train_loader = DataLoader(train_dataset, batch_size, num_workers=4, shuffle=True)
 
-    # todo add label file
+    train_dataset = VOCDataset(train_dataset_config, transform=train_transform, target_transform=target_transform)
+    train_loader = DataLoader(train_dataset, train_config.batch_size, num_workers=4, shuffle=True)
+
     validation_dataset_config = Config(
-        root_path=validation_dataset_path,
-        images_sets_relative_path=validation_images_path,
+        root_path=train_config.validation_dataset_path,
         image_ids=validation_images_ids,
-        # class_labels=('BACKGROUND',
-        #                         'type_001',
-        #                         'type_002',
-        #                         'type_003',
-        #                         'type_004',
-        #                         'type_005',
-        #                         'type_006',
-        #                         'type_007',
-        #                         'type_008',
-        #                         'type_009',
-        #                         'type_010',
-        #                         'type_011',
-        #                         'type_012',
-        #                         'type_013',
-        #                         ),
-        class_labels=('BACKGROUND', 'red', 'green', 'blue'),
+        class_labels=tuple(class_labels),
         difficult_only=False
     )
 
     val_dataset = VOCDataset(validation_dataset_config, transform=test_transform, target_transform=target_transform)
-    val_loader = DataLoader(val_dataset, batch_size, num_workers=4, shuffle=False)
+    val_loader = DataLoader(val_dataset, train_config.batch_size, num_workers=4, shuffle=False)
 
-    # net = create_mobilenetv1_ssd(num_classes, device=DEVICE)
     net = create_mobilenetv1_ssd(num_classes)
 
     params = [
-        {'params': net.base_net.parameters(), 'lr': lr},
+        {'params': net.base_net.parameters(), 'lr': train_config.lr},
         {'params': itertools.chain(
             net.source_layer_add_ons.parameters(),
             net.extras.parameters()
-        ), 'lr': lr},
+        ), 'lr': train_config.lr},
         {'params': itertools.chain(
             net.regression_headers.parameters(),
             net.classification_headers.parameters()
@@ -189,18 +137,35 @@ if __name__ == '__main__':
     loss_function = RotatedMultiboxLoss(
         priors, iou_threshold=0.5, neg_pos_ratio=3, center_variance=0.1, size_variance=0.2, device=DEVICE,
     )
-    optimizer = torch.optim.SGD(params, lr=lr, momentum=momentum, weight_decay=weight_decay)
-    scheduler = CosineAnnealingLR(optimizer, t_max, last_epoch=last_epoch)
+    optimizer = torch.optim.SGD(params,
+                                lr=train_config.lr,
+                                momentum=train_config.momentum,
+                                weight_decay=train_config.weight_decay
+                                )
+    scheduler = CosineAnnealingLR(optimizer, train_config.t_max, last_epoch=last_epoch)
 
-    for epoch in range(last_epoch + 1, num_epochs):
+    fitter = Fitter(
+        net=net,
+        train_data_loader=train_loader,
+        validation_data_loader=val_loader,
+        loss_function=loss_function,
+        optimizer=optimizer,
+        device=DEVICE,
+    )
+
+    for epoch in range(last_epoch + 1, train_config.num_epochs):
         scheduler.step()
-        train(train_loader, net, loss_function, optimizer, device=DEVICE, debug_steps=100, epoch=epoch)
-        if epoch % 10 == 0:
-            print(f"epoch! = {epoch}")
-            val_loss, val_regression_loss, val_classification_loss = test(val_loader, net, loss_function, DEVICE)
-            print(f"Validation Loss: {val_loss:.8f}, ")
-            print(f"Validation Regression Loss {val_regression_loss:.8f}, " )
-            print(f"Validation Classification Loss: {val_classification_loss:.8f}")
-            model_path = os.path.join(checkpoint_folder, f"mobilev1-ssd-Epoch-{epoch}-Loss-{val_loss}.pth")
+        fitter.train()
+
+        if epoch != 0 and epoch % train_config.validation_step == 0:
+            print(f'Epoch: {epoch}')
+            val_loss, val_regression_loss, val_classification_loss = fitter.validate()
+            print(
+                f'Validation Loss: {val_loss:.8f}\n' +
+                f'Validation Regression Loss: {val_regression_loss:.8f}\n' +
+                f'Validation Classification Loss: {val_classification_loss:.8f}\n'
+            )
+            model_path = os.path.join(train_config.checkpoint_folder_path,
+                                      f"mobilev1-ssd-Epoch-{epoch}-Loss-{val_loss}.pth")
             net.save(model_path)
-            logging.info(f"Saved model {model_path}")
+            print(f'Saved model {model_path}')

@@ -1,0 +1,16 @@
+{
+  "train_dataset_path": "/home/truewarg/data/VOC2007-fake-3/",
+  "train_image_ids_path": "ImageSets/Main/trainval.txt",
+  "validation_dataset_path": "/home/truewarg/data/fake-test-3/VOC2007-fake-3/",
+  "validation_image_ids_path": "ImageSets/Main/test.txt",
+  "labels_file": "/home/truewarg/data/VOC2007-fake-3/Labels/labels.txt",
+  "base_net_path": "models/mobilenet_v1_with_relu_69_5.pth",
+  "checkpoint_folder_path": "checkpoint",
+  "batch_size": 8,
+  "num_epochs": 100,
+  "lr": 0.01,
+  "momentum": 0.9,
+  "weight_decay": 5e-4,
+  "t_max": 120,
+  "validation_step": 10
+}
