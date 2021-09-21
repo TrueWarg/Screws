@@ -11,7 +11,6 @@ from torch.utils.data import Dataset
 @dataclass()
 class Config:
     root_path: str
-    images_sets_relative_path: str
     image_ids: List
     class_labels: Tuple
     difficult_only: bool
