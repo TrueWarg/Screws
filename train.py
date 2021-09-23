@@ -8,7 +8,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 
 from fitter import Fitter
-from dataset.augmentation.transforms import TestTransform, TrainAugmentation
+from dataset.augmentation.transforms import TestTransform, TrainTransform
 from dataset.voc_dataset import VOCDataset, Config
 from model.ssd.box_losses import RotatedMultiboxLoss
 from model.ssd.mobilenet import mobileV1_ssd_config
@@ -89,7 +89,7 @@ if __name__ == '__main__':
     config = mobileV1_ssd_config.CONFIG
     priors = mobileV1_ssd_config.priors
 
-    train_transform = TrainAugmentation(config.image_size, config.image_mean, config.image_std)
+    train_transform = TrainTransform(config.image_size, config.image_mean, config.image_std)
     target_transform = RotatedPriorMatcher(priors, config.center_variance, config.size_variance, iou_threshold=0.5)
     test_transform = TestTransform(config.image_size, config.image_mean, config.image_std)
 
@@ -156,9 +156,8 @@ if __name__ == '__main__':
     for epoch in range(last_epoch + 1, train_config.num_epochs):
         scheduler.step()
         fitter.train()
-
+        print(f'Epoch: {epoch}')
         if epoch != 0 and epoch % train_config.validation_step == 0:
-            print(f'Epoch: {epoch}')
             val_loss, val_regression_loss, val_classification_loss = fitter.validate()
             print(
                 f'Validation Loss: {val_loss:.8f}\n' +
