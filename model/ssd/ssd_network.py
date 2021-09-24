@@ -120,7 +120,7 @@ class SSDNetwork(nn.Module):
             boxes = converters.locations_to_boxes(
                 locations, self.priors, self.config._center_variance, self.config._size_variance
             )
-            boxes = converters.xcycwha_to_xyxya(boxes)
+            boxes = converters.center_form_to_corner_form(boxes)
             return confidences, boxes
         else:
             return confidences, locations

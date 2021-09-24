@@ -103,7 +103,7 @@ class SSD(nn.Module):
             boxes = converters.locations_to_boxes(
                 locations, self.priors, self.config.center_variance, self.config.size_variance
             )
-            boxes = converters.xcycwha_to_xyxya(boxes)
+            boxes = converters.center_form_to_corner_form(boxes)
             return confidences, boxes
         else:
             return confidences, locations

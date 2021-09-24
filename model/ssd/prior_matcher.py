@@ -3,7 +3,7 @@ from typing import Tuple
 import numpy as np
 import torch
 
-from bbox.converters import convert_boxes_to_locations, corner_form_to_center_form, \
+from bbox.converters import boxes_to_locations, corner_form_to_center_form, \
     center_form_to_corner_form
 from bbox.metrics import rotated_xyxy_iou
 
@@ -45,7 +45,7 @@ class RotatedPriorMatcher(object):
 
         boxes, labels = _assign_priors(gt_boxes, gt_labels, self._corner_form_priors, self._iou_threshold)
         boxes = corner_form_to_center_form(boxes)
-        locations = convert_boxes_to_locations(
+        locations = boxes_to_locations(
             boxes,
             self._center_form_priors,
             self._center_variance,

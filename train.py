@@ -140,7 +140,7 @@ if __name__ == '__main__':
     optimizer = torch.optim.SGD(params,
                                 lr=train_config.lr,
                                 momentum=train_config.momentum,
-                                weight_decay=train_config.weight_decay
+                                weight_decay=train_config.weight_decay,
                                 )
     scheduler = CosineAnnealingLR(optimizer, train_config.t_max, last_epoch=last_epoch)
 
