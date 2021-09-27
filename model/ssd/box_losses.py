@@ -8,17 +8,11 @@ import torch.nn.functional as F
 class RotatedMultiboxLoss(nn.Module):
     def __init__(self,
                  priors,
-                 iou_threshold: float,
                  neg_pos_ratio: int,
-                 center_variance: float,
-                 size_variance: float,
                  device,
                  ):
         super(RotatedMultiboxLoss, self).__init__()
-        self.iou_threshold = iou_threshold
-        self.neg_pos_ratio = neg_pos_ratio
-        self.center_variance = center_variance
-        self.size_variance = size_variance
+        self._neg_pos_ratio = neg_pos_ratio
         self.priors = priors
         self.priors.to(device)
 
@@ -27,7 +21,7 @@ class RotatedMultiboxLoss(nn.Module):
         with torch.no_grad():
             # derived from cross_entropy=sum(log(p))
             loss = -F.log_softmax(confidence, dim=2)[:, :, 0]
-            mask = hard_negative_mining(loss, labels, self.neg_pos_ratio)
+            mask = hard_negative_mining(loss, labels, self._neg_pos_ratio)
 
         confidence = confidence[mask, :]
         classification_loss = F.cross_entropy(confidence.reshape(-1, num_classes), labels[mask], size_average=False)

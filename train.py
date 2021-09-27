@@ -99,9 +99,13 @@ if __name__ == '__main__':
 
     train_dataset_config = Config(
         root_path=train_config.train_dataset_path,
+        annotations_relative_path='Annotations',
+        annotation_extension='xml',
+        images_relative_path='JPEGImages',
+        images_extension='png',
         image_ids=train_images_ids,
         class_labels=tuple(class_labels),
-        difficult_only=False
+        skip_difficult=False
     )
 
     train_dataset = VOCDataset(train_dataset_config, transform=train_transform, target_transform=target_transform)
@@ -109,9 +113,13 @@ if __name__ == '__main__':
 
     validation_dataset_config = Config(
         root_path=train_config.validation_dataset_path,
+        annotations_relative_path='Annotations',
+        annotation_extension='xml',
+        images_relative_path='JPEGImages',
+        images_extension='png',
         image_ids=validation_images_ids,
         class_labels=tuple(class_labels),
-        difficult_only=False
+        skip_difficult=False
     )
 
     val_dataset = VOCDataset(validation_dataset_config, transform=test_transform, target_transform=target_transform)
@@ -134,9 +142,8 @@ if __name__ == '__main__':
     last_epoch = -1
     net.to(DEVICE)
 
-    loss_function = RotatedMultiboxLoss(
-        priors, iou_threshold=0.5, neg_pos_ratio=3, center_variance=0.1, size_variance=0.2, device=DEVICE,
-    )
+    loss_function = RotatedMultiboxLoss(priors, neg_pos_ratio=3, device=DEVICE)
+
     optimizer = torch.optim.SGD(params,
                                 lr=train_config.lr,
                                 momentum=train_config.momentum,
