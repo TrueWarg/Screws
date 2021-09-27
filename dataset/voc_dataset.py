@@ -11,9 +11,13 @@ from torch.utils.data import Dataset
 @dataclass()
 class Config:
     root_path: str
+    annotations_relative_path: str
+    annotation_extension: str
+    images_relative_path: str
+    images_extension: str
     image_ids: List
     class_labels: Tuple
-    difficult_only: bool
+    skip_difficult: bool
 
 
 class VOCDataset(Dataset):
@@ -27,7 +31,7 @@ class VOCDataset(Dataset):
     def __getitem__(self, index: int):
         image_id = self._config.image_ids[index]
         boxes, labels, is_difficult = self._extract_annotations(image_id)
-        if not self._config.difficult_only:
+        if not self._config.skip_difficult:
             boxes = boxes[is_difficult == 0]
             labels = labels[is_difficult == 0]
         image = self._read_image(image_id)
@@ -37,9 +41,12 @@ class VOCDataset(Dataset):
             boxes, labels = self._target_transform(boxes, labels)
         return image, boxes, labels
 
-    # todo move Annotation relative path to config?
     def _extract_annotations(self, image_id: str):
-        annotation_path = os.path.join(self._root_path, f"Annotations/{image_id}.xml")
+        annotation_path = os.path.join(
+            self._root_path,
+            self._config.annotations_relative_path,
+            f'{image_id}.{self._config.annotation_extension}',
+        )
         objects = ET.parse(annotation_path).findall("object")
         boxes = []
         labels = []
@@ -59,8 +66,8 @@ class VOCDataset(Dataset):
             np.array(is_difficult, dtype=np.uint8),
         )
 
-    def _extract_bbox(self, object) -> List:
-        bbox = object.find('bndbox')
+    def _extract_bbox(self, element) -> List:
+        bbox = element.find('bndbox')
         # Voc from Matlab, which indices start from 0
         x1 = float(bbox.find('xmin').text) - 1
         y1 = float(bbox.find('ymin').text) - 1
@@ -70,7 +77,11 @@ class VOCDataset(Dataset):
         return [x1, y1, x2, y2, angle]
 
     def _read_image(self, image_id: str) -> np.ndarray:
-        image_path = os.path.join(self._root_path, f"JPEGImages/{image_id}.png")
+        image_path = os.path.join(
+            self._root_path,
+            self._config.images_relative_path,
+            f'{image_id}.{self._config.images_extension}',
+        )
         image = cv2.imread(image_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         return image

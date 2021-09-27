@@ -1,10 +1,7 @@
-import numpy as np
 from torch import nn
 from torch.nn import Conv2d, Sequential, ModuleList, ReLU
 
-from dataset.augmentation.transforms import PredictionTransform
 from model.ssd.mobilenet.mobileV1_ssd_config import CONFIG
-from model.ssd.predictor import Predictor
 from model.ssd.ssd import SSD
 
 

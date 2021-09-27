@@ -51,7 +51,7 @@ class Predictor:
             subset_boxes = boxes[mask, :]
             box_probs = torch.cat([subset_boxes, probs.reshape(-1, 1)], dim=1)
             box_probs = hard_nms(
-                box_scores=box_probs,
+                box_and_scores=box_probs,
                 iou_threshold=self._iou_threshold,
                 top_k=top_k,
                 candidate_size=self._candidate_size
