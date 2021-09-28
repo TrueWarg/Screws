@@ -5,17 +5,14 @@ from model.ssd.mobilenet.mobileV1_ssd_config import CONFIG
 from model.ssd.ssd import SSD
 
 
-def create_mobilenetv1_ssd(num_classes, is_test=False, priors=None):
+def create_mobilenetv1_ssd(num_classes):
     return SSD(
         num_classes=num_classes,
         base_net=_create_base_net(),
-        source_layer_indexes=[12, 14],
-        extras=_create_feature_extraction_layers(),
+        base_net_source_layer_indices=[12, 14],
+        feature_extractors=_create_feature_extraction_layers(),
         classification_headers=_create_classification_headers(num_classes),
         regression_headers=_create_regression_headers(),
-        is_test=is_test,
-        config=CONFIG,
-        priors=priors,
     )
 
 
