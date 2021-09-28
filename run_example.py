@@ -9,17 +9,23 @@ from model.ssd.mobilenet import mobileV1_ssd_config
 from model.ssd.mobilenet.mobileV1_ssd import create_mobilenetv1_ssd
 from model.ssd.mobilenet.mobileV1_ssd_config import CONFIG
 from model.ssd.predictor import Predictor
+from model.ssd.ssd import SSDTest
 from train import DEVICE
 
 
 def demo():
-    model_path = 'checkpoint/mobilev1-ssd-Epoch-90-Loss-1.1465726057688395.pth'
+    model_path = 'checkpoint/mobilev1-ssd-Epoch-90-Loss-1.2602647761503856.pth'
     image_path = '/home/truewarg/data/fake-test-3/VOC2007-fake-3/JPEGImages/image_50.png'
 
     class_labels = ('BACKGROUND', 'red', 'green', 'blue')
 
-    net = create_mobilenetv1_ssd(len(class_labels), is_test=True, priors=mobileV1_ssd_config.priors)
+    net = create_mobilenetv1_ssd(len(class_labels))
     net.load(model_path)
+    net = SSDTest(
+        ssd=net,
+        config=CONFIG,
+        priors=mobileV1_ssd_config.priors,
+    )
     predictor = Predictor(
         net=net,
         transform=PredictionTransform(CONFIG.image_size, CONFIG.image_mean, CONFIG.image_std),

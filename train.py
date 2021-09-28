@@ -130,8 +130,7 @@ if __name__ == '__main__':
     params = [
         {'params': net.base_net.parameters(), 'lr': train_config.lr},
         {'params': itertools.chain(
-            net.source_layer_add_ons.parameters(),
-            net.extras.parameters()
+            net.feature_extractors.parameters()
         ), 'lr': train_config.lr},
         {'params': itertools.chain(
             net.regression_headers.parameters(),
