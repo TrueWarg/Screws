@@ -141,7 +141,7 @@ if __name__ == '__main__':
     last_epoch = -1
     net.to(DEVICE)
 
-    loss_function = RotatedMultiboxLoss(priors, neg_pos_ratio=3, device=DEVICE)
+    loss_function = RotatedMultiboxLoss(neg_pos_ratio=3)
 
     optimizer = torch.optim.SGD(params,
                                 lr=train_config.lr,

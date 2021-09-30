@@ -19,10 +19,10 @@ def _assign_priors(target_boxes: torch.Tensor,
 
     for target_index, prior_index in enumerate(best_prior_per_target_index):
         best_target_per_prior_index[prior_index] = target_index
-    # 2.0 is used to make sure every target has a prior assigned
+    # 2.is used to make sure every target has a prior assigned
     best_target_per_prior.index_fill_(0, best_prior_per_target_index, 2)
     labels = target_categories[best_target_per_prior_index]
-    # the backgournd id
+    # the background id
     labels[best_target_per_prior < riou_threshold] = 0
     boxes = target_boxes[best_target_per_prior_index]
 

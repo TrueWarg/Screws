@@ -6,15 +6,9 @@ import torch.nn.functional as F
 
 
 class RotatedMultiboxLoss(nn.Module):
-    def __init__(self,
-                 priors,
-                 neg_pos_ratio: int,
-                 device,
-                 ):
+    def __init__(self, neg_pos_ratio: int):
         super(RotatedMultiboxLoss, self).__init__()
         self._neg_pos_ratio = neg_pos_ratio
-        self.priors = priors
-        self.priors.to(device)
 
     def forward(self, confidence, predicted_locations, labels, gt_locations):
         num_classes = confidence.size(2)

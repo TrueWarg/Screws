@@ -25,46 +25,45 @@ class Predictor:
             self._net.eval()
 
     def predict(self, image, top_k=-1):
-        cpu_device = torch.device("cpu")
         height, width, _ = image.shape
         image = self._transform(image)
-        images = image.unsqueeze(0)
-        images = images.to(self._device)
+        image = image.unsqueeze(0)
+        image = image.to(self._device)
         with torch.no_grad():
-            scores, boxes = self._net.forward(images)
+            scores, boxes = self._net.forward(image)
+
         boxes = boxes[0]
         scores = scores[0]
-        boxes = boxes.to(cpu_device)
-        scores = scores.to(cpu_device)
-        picked_box_probs = []
+
+        picked_box_and_scores = []
         picked_labels = []
 
         for class_index in range(1, scores.size(1)):
-            probs = scores[:, class_index]
-            mask = probs > self._filter_threshold
-            print(f" probs {probs.max()}")
-            probs = probs[mask]
+            subset_scores = scores[:, class_index]
+            mask = subset_scores > self._filter_threshold
+            print(f" probs {subset_scores.max()}")
+            subset_scores = subset_scores[mask]
 
-            if probs.size(0) == 0:
+            if subset_scores.size(0) == 0:
                 continue
 
             subset_boxes = boxes[mask, :]
-            box_probs = torch.cat([subset_boxes, probs.reshape(-1, 1)], dim=1)
-            box_probs = hard_nms(
-                box_and_scores=box_probs,
+            box_and_scores = torch.cat([subset_boxes, subset_scores.reshape(-1, 1)], dim=1)
+            box_and_scores = hard_nms(
+                box_and_scores=box_and_scores,
                 iou_threshold=self._iou_threshold,
                 top_k=top_k,
                 candidate_size=self._candidate_size
             )
-            picked_box_probs.append(box_probs)
-            picked_labels.extend([class_index] * box_probs.size(0))
+            picked_box_and_scores.append(box_and_scores)
+            picked_labels.extend([class_index] * box_and_scores.size(0))
 
-        if not picked_box_probs:
+        if not picked_box_and_scores:
             return torch.tensor([]), torch.tensor([]), torch.tensor([])
 
-        picked_box_probs = torch.cat(picked_box_probs)
-        picked_box_probs[:, 0] *= width
-        picked_box_probs[:, 1] *= height
-        picked_box_probs[:, 2] *= width
-        picked_box_probs[:, 3] *= height
-        return picked_box_probs[:, :5], torch.tensor(picked_labels), picked_box_probs[:, 4]
+        picked_box_and_scores = torch.cat(picked_box_and_scores)
+        picked_box_and_scores[:, 0] *= width
+        picked_box_and_scores[:, 1] *= height
+        picked_box_and_scores[:, 2] *= width
+        picked_box_and_scores[:, 3] *= height
+        return picked_box_and_scores[:, :5], torch.tensor(picked_labels), picked_box_and_scores[:, 4]
