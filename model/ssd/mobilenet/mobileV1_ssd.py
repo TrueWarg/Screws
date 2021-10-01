@@ -87,21 +87,21 @@ def _create_feature_extraction_layers() -> ModuleList:
 
 def _create_regression_headers() -> ModuleList:
     return ModuleList([
-        Conv2d(in_channels=512, out_channels=6 * 5, kernel_size=3, padding=1),
-        Conv2d(in_channels=1024, out_channels=6 * 5, kernel_size=3, padding=1),
-        Conv2d(in_channels=512, out_channels=6 * 5, kernel_size=3, padding=1),
-        Conv2d(in_channels=256, out_channels=6 * 5, kernel_size=3, padding=1),
-        Conv2d(in_channels=256, out_channels=6 * 5, kernel_size=3, padding=1),
-        Conv2d(in_channels=256, out_channels=6 * 5, kernel_size=3, padding=1),
+        Conv2d(in_channels=512, out_channels=14 * 5, kernel_size=3, padding=1),
+        Conv2d(in_channels=1024, out_channels=14 * 5, kernel_size=3, padding=1),
+        Conv2d(in_channels=512, out_channels=14 * 5, kernel_size=3, padding=1),
+        Conv2d(in_channels=256, out_channels=14 * 5, kernel_size=3, padding=1),
+        Conv2d(in_channels=256, out_channels=14 * 5, kernel_size=3, padding=1),
+        Conv2d(in_channels=256, out_channels=14 * 5, kernel_size=3, padding=1),
     ])
 
 
 def _create_classification_headers(num_classes: int) -> ModuleList:
     return ModuleList([
-        Conv2d(in_channels=512, out_channels=6 * num_classes, kernel_size=3, padding=1),
-        Conv2d(in_channels=1024, out_channels=6 * num_classes, kernel_size=3, padding=1),
-        Conv2d(in_channels=512, out_channels=6 * num_classes, kernel_size=3, padding=1),
-        Conv2d(in_channels=256, out_channels=6 * num_classes, kernel_size=3, padding=1),
-        Conv2d(in_channels=256, out_channels=6 * num_classes, kernel_size=3, padding=1),
-        Conv2d(in_channels=256, out_channels=6 * num_classes, kernel_size=3, padding=1),
+        Conv2d(in_channels=512, out_channels=14 * num_classes, kernel_size=3, padding=1),
+        Conv2d(in_channels=1024, out_channels=14 * num_classes, kernel_size=3, padding=1),
+        Conv2d(in_channels=512, out_channels=14 * num_classes, kernel_size=3, padding=1),
+        Conv2d(in_channels=256, out_channels=14 * num_classes, kernel_size=3, padding=1),
+        Conv2d(in_channels=256, out_channels=14 * num_classes, kernel_size=3, padding=1),
+        Conv2d(in_channels=256, out_channels=14 * num_classes, kernel_size=3, padding=1),
     ])

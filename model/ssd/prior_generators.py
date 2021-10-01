@@ -82,7 +82,7 @@ def generate_ssd_priors(specs: List[SsdBoxGenParams], image_size, clamp=True) ->
         priors.extend(generate_rotated_prior_boxes(image_size, spec))
 
     priors = torch.tensor(priors)
-    priors = priors[priors.shape[0] - 3000:priors.shape[0]]
+    # priors = priors[priors.shape[0] - 3000:priors.shape[0]]
     if clamp:
         low = torch.tensor([[0.0, 0.0, 0.0, 0.0, -math.pi]])
         high = torch.tensor([[1.0, 1.0, 1.0, 1.0, math.pi]])
