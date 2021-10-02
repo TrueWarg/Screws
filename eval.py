@@ -1,4 +1,6 @@
+import json
 import os
+from dataclasses import dataclass
 
 import numpy as np
 import torch
@@ -6,33 +8,55 @@ import torch
 from bbox.metrics import iou
 from dataset.augmentation.transforms import TestTransform, PredictionTransform
 from dataset.voc_dataset import Config, VOCDataset
+from file_readers import read_image_ids, read_class_label
 from model.ssd.mobilenet import mobileV1_ssd_config
 from model.ssd.mobilenet.mobileV1_ssd import create_mobilenetv1_ssd
 from model.ssd.mobilenet.mobileV1_ssd_config import CONFIG
 from model.ssd.predictor import Predictor
 from model.ssd.prior_matcher import RotatedPriorMatcher
-from train import DEVICE
+from model.ssd.ssd import SSDTest
+
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+BACKGROUND_CLASS = 'BACKGROUND'
 
 
-def _read_image_ids(image_sets_file):
-    ids = []
-    with open(image_sets_file) as f:
-        for line in f:
-            ids.append(line.rstrip())
-    return ids
+@dataclass()
+class EvalConfig:
+    dataset_path: str
+    image_ids_path: str
+    labels_path: str
+    trained_model_path: str
+    results_path: str
+    iou_threshold: float
 
 
-def _group_annotation_by_class(dataset):
+# add default value on error?
+def _read_config() -> EvalConfig:
+    with open("eval_config.json") as f:
+        config_items = json.load(f)
+
+    return EvalConfig(
+        dataset_path=config_items['dataset_path'],
+        image_ids_path=config_items['image_ids_path'],
+        labels_path=config_items['labels_path'],
+        trained_model_path=config_items['trained_model_path'],
+        results_path=config_items['results_path'],
+        iou_threshold=config_items['iou_threshold']
+    )
+
+
+def _group_annotation_by_class(dataset: VOCDataset):
     true_case_stat = {}
     all_gt_boxes = {}
     all_difficult_cases = {}
-    for i in range(len(dataset)):
-        image_id, annotation = dataset.get_annotation(i)
+    for annotation_index in range(len(dataset)):
+        image_id, annotation = dataset.get_annotation(annotation_index)
         gt_boxes, classes, is_difficult = annotation
         gt_boxes = torch.from_numpy(gt_boxes)
-        for i, difficult in enumerate(is_difficult):
-            class_index = int(classes[i])
-            gt_box = gt_boxes[i]
+
+        for difficult_index, difficult in enumerate(is_difficult):
+            class_index = int(classes[difficult_index])
+            gt_box = gt_boxes[difficult_index]
             if not difficult:
                 true_case_stat[class_index] = true_case_stat.get(class_index, 0) + 1
 
@@ -40,19 +64,20 @@ def _group_annotation_by_class(dataset):
                 all_gt_boxes[class_index] = {}
             if image_id not in all_gt_boxes[class_index]:
                 all_gt_boxes[class_index][image_id] = []
+
             all_gt_boxes[class_index][image_id].append(gt_box)
+
             if class_index not in all_difficult_cases:
                 all_difficult_cases[class_index] = {}
             if image_id not in all_difficult_cases[class_index]:
                 all_difficult_cases[class_index][image_id] = []
+
             all_difficult_cases[class_index][image_id].append(difficult)
 
     for class_index in all_gt_boxes:
         for image_id in all_gt_boxes[class_index]:
             all_gt_boxes[class_index][image_id] = torch.stack(all_gt_boxes[class_index][image_id])
-    for class_index in all_difficult_cases:
-        for image_id in all_difficult_cases[class_index]:
-            all_gt_boxes[class_index][image_id] = torch.tensor(all_gt_boxes[class_index][image_id])
+
     return true_case_stat, all_gt_boxes, all_difficult_cases
 
 
@@ -145,22 +170,22 @@ def _compute_voc2007_average_precision(precision, recall):
 
 
 if __name__ == '__main__':
-    eval_dir = "eval_results"
+    eval_config = _read_config()
 
-    validation_dataset_path = '/home/truewarg/data/fake-test-3/VOC2007-fake-3/'
-    validation_images_path = "ImageSets/Main/test.txt"
-    trained_model = 'checkpoint/mobilev1-ssd-Epoch-90-Loss-1.5891754905382791.pth'
-    iou_threshold = 0.5
+    images_ids = read_image_ids(os.path.join(eval_config.dataset_path, eval_config.image_ids_path))
 
-    validation_images_ids = _read_image_ids(os.path.join(validation_dataset_path, validation_images_path))
+    class_labels = read_class_label(eval_config.labels_path)
+    class_labels.insert(0, BACKGROUND_CLASS)
 
-    # todo add label file
-    validation_dataset_config = Config(
-        root_path=validation_dataset_path,
-        images_sets_relative_path=validation_images_path,
-        image_ids=validation_images_ids,
-        class_labels=('BACKGROUND', 'red', 'green', 'blue'),
-        difficult_only=False
+    dataset_config = Config(
+        root_path=eval_config.dataset_path,
+        annotations_relative_path='Annotations',
+        annotation_extension='xml',
+        images_relative_path='JPEGImages',
+        images_extension='png',
+        image_ids=images_ids,
+        class_labels=tuple(class_labels),
+        skip_difficult=False
     )
 
     config = mobileV1_ssd_config.CONFIG
@@ -169,12 +194,16 @@ if __name__ == '__main__':
     target_transform = RotatedPriorMatcher(priors, config.center_variance, config.size_variance, 0.5)
     test_transform = TestTransform(config.image_size, config.image_mean, config.image_std)
 
-    dataset = VOCDataset(validation_dataset_config)
+    dataset = VOCDataset(dataset_config)
 
-    num_classes = len(validation_dataset_config.class_labels)
-    net = create_mobilenetv1_ssd(num_classes, is_test=True, priors=mobileV1_ssd_config.priors)
-
-    net.load(trained_model)
+    num_classes = len(dataset_config.class_labels)
+    net = create_mobilenetv1_ssd(num_classes)
+    net.load(eval_config.trained_model_path)
+    net = SSDTest(
+        ssd=net,
+        config=CONFIG,
+        priors=mobileV1_ssd_config.priors,
+    )
     net = net.to(DEVICE)
 
     true_case_stat, all_gb_boxes, all_difficult_cases = _group_annotation_by_class(dataset)
@@ -201,32 +230,32 @@ if __name__ == '__main__':
             boxes + 1.0
         ], dim=1))
     results = torch.cat(results)
-    for class_index, class_label in enumerate(validation_dataset_config.class_labels):
+    for class_index, class_label in enumerate(dataset_config.class_labels):
         if class_index == 0:
             continue  # ignore background
-        prediction_path = os.path.join(eval_dir, f'detection_{class_label}.txt')
+        prediction_path = os.path.join(eval_config.results_path, f'detection_{class_label}.txt')
 
         with open(prediction_path, "w") as f:
             sub = results[results[:, 1] == class_index, :]
             for i in range(sub.size(0)):
                 prob_box = sub[i, 2:].numpy()
-                image_id = validation_dataset_config.image_ids[int(sub[i, 0])]
+                image_id = dataset_config.image_ids[int(sub[i, 0])]
                 print(
                     image_id + " " + " ".join([str(v) for v in prob_box]),
                     file=f
                 )
     aps = []
     print("\n\nAverage Precision Per-class:")
-    for class_index, class_label in enumerate(validation_dataset_config.class_labels):
+    for class_index, class_label in enumerate(dataset_config.class_labels):
         if class_index == 0:
             continue
-        prediction_path = os.path.join(eval_dir, f'detection_{class_label}.txt')
+        prediction_path = os.path.join(eval_config.results_path, f'detection_{class_label}.txt')
         ap = _compute_average_precision_per_class(
             true_case_stat[class_index],
             all_gb_boxes[class_index],
             all_difficult_cases[class_index],
             prediction_path,
-            iou_threshold,
+            eval_config.iou_threshold,
             True
         )
         aps.append(ap)
