@@ -7,33 +7,17 @@ import torch
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 
-from fitter import Fitter
 from dataset.augmentation.transforms import TestTransform, TrainTransform
 from dataset.voc_dataset import VOCDataset, Config
+from file_readers import read_image_ids, read_class_label
+from fitter import Fitter
 from model.ssd.box_losses import RotatedMultiboxLoss
 from model.ssd.mobilenet import mobileV1_ssd_config
 from model.ssd.mobilenet.mobileV1_ssd import create_mobilenetv1_ssd
 from model.ssd.prior_matcher import RotatedPriorMatcher
-from typing import List
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 BACKGROUND_CLASS = 'BACKGROUND'
-
-
-def _read_image_ids(image_sets_path) -> List:
-    ids = []
-    with open(image_sets_path) as f:
-        for line in f:
-            ids.append(line.rstrip())
-    return ids
-
-
-def _read_class_label(labels_path) -> List:
-    labels = []
-    with open(labels_path) as f:
-        for line in f:
-            labels.append(line.rstrip())
-    return labels
 
 
 @dataclass()
@@ -42,7 +26,7 @@ class TrainConfig:
     train_image_ids_path: str
     validation_dataset_path: str
     validation_image_ids_path: str
-    labels_file: str
+    labels_path: str
     base_net_path: str
     checkpoint_folder_path: str
     batch_size: int
@@ -64,7 +48,7 @@ def _read_config() -> TrainConfig:
         train_image_ids_path=config_items['train_image_ids_path'],
         validation_dataset_path=config_items['validation_dataset_path'],
         validation_image_ids_path=config_items['validation_image_ids_path'],
-        labels_file=config_items['labels_file'],
+        labels_path=config_items['labels_path'],
         base_net_path=config_items['base_net_path'],
         checkpoint_folder_path=config_items['checkpoint_folder_path'],
         batch_size=config_items['batch_size'],
@@ -80,10 +64,10 @@ def _read_config() -> TrainConfig:
 if __name__ == '__main__':
     train_config = _read_config()
 
-    train_images_ids = _read_image_ids(
+    train_images_ids = read_image_ids(
         os.path.join(train_config.train_dataset_path, train_config.train_image_ids_path))
 
-    validation_images_ids = _read_image_ids(
+    validation_images_ids = read_image_ids(
         os.path.join(train_config.validation_dataset_path, train_config.validation_image_ids_path))
 
     config = mobileV1_ssd_config.CONFIG
@@ -93,7 +77,7 @@ if __name__ == '__main__':
     target_transform = RotatedPriorMatcher(priors, config.center_variance, config.size_variance, iou_threshold=0.5)
     test_transform = TestTransform(config.image_size, config.image_mean, config.image_std)
 
-    class_labels = _read_class_label(train_config.labels_file)
+    class_labels = read_class_label(train_config.labels_path)
     class_labels.insert(0, BACKGROUND_CLASS)
     num_classes = len(class_labels)
 
