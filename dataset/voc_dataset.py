@@ -47,17 +47,17 @@ class VOCDataset(Dataset):
             self._config.annotations_relative_path,
             f'{image_id}.{self._config.annotation_extension}',
         )
-        objects = ET.parse(annotation_path).findall("object")
+        elements = ET.parse(annotation_path).findall("object")
         boxes = []
         labels = []
         is_difficult = []
 
-        for object in objects:
-            class_name = object.find('name').text.lower().strip()
-            bbox = self._extract_bbox(object)
+        for element in elements:
+            class_name = element.find('name').text.lower().strip()
+            bbox = self._extract_bbox(element)
             boxes.append(bbox)
             labels.append(self._classes[class_name])
-            is_difficult_str = object.find('difficult').text
+            is_difficult_str = element.find('difficult').text
             is_difficult.append(int(is_difficult_str) if is_difficult_str else 0)
 
         return (
@@ -69,12 +69,12 @@ class VOCDataset(Dataset):
     def _extract_bbox(self, element) -> List:
         bbox = element.find('bndbox')
         # Voc from Matlab, which indices start from 0
-        x1 = float(bbox.find('xmin').text) - 1
-        y1 = float(bbox.find('ymin').text) - 1
-        x2 = float(bbox.find('xmax').text) - 1
-        y2 = float(bbox.find('ymax').text) - 1
+        x_min = float(bbox.find('xmin').text) - 1
+        y_min = float(bbox.find('ymin').text) - 1
+        x_max = float(bbox.find('xmax').text) - 1
+        y_max = float(bbox.find('ymax').text) - 1
         angle = float(bbox.find('angle').text)
-        return [x1, y1, x2, y2, angle]
+        return [x_min, y_min, x_max, y_max, angle]
 
     def _read_image(self, image_id: str) -> np.ndarray:
         image_path = os.path.join(

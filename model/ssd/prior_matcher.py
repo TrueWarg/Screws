@@ -29,7 +29,7 @@ def _assign_priors(target_boxes: torch.Tensor,
     return boxes, labels
 
 
-class RotatedPriorMatcher(object):
+class RotatedPriorMatcher:
     def __init__(self, center_form_priors, center_variance: float, size_variance: float, iou_threshold: float):
         self._center_form_priors = center_form_priors
         self._corner_form_priors = center_form_to_corner_form(center_form_priors)

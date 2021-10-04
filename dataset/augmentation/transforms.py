@@ -19,7 +19,7 @@ class TrainTransform:
 
         self._transforms = Compose([
             ConvertToFloat32(),
-            PhotometricDistort(),
+            PhotometricDistortion(),
             ToPercentCoordinates(),
             Resize(image_size),
             SubtractMeans(mean),
@@ -122,7 +122,7 @@ class Compose:
         return image, boxes, labels
 
 
-class PhotometricDistort:
+class PhotometricDistortion:
     def __init__(self):
         self._color_model_transform = [
             RandomContrast(),  # RGB
@@ -147,6 +147,9 @@ class PhotometricDistort:
 
 
 class RandomSaturation:
+    """
+        Apply random saturation. HSV color model is expected.
+    """
     def __init__(self, lower=0.5, upper=1.5):
         assert 0 <= lower <= upper, "lower must be in range 0.0 - upper"
 
@@ -155,19 +158,25 @@ class RandomSaturation:
 
     def __call__(self, image, boxes=None, labels=None):
         if random.randint(2):
+            # S in HSV
             image[:, :, 1] *= random.uniform(self._lower, self._upper)
 
         return image, boxes, labels
 
 
 class RandomHue:
+    """
+        Apply random hue. HSV color model is expected.
+    """
     def __init__(self, delta=18.0):
         assert 0.0 <= delta <= 360.0, "delta must be range 0.0 - 360.0"
         self._delta = delta
 
     def __call__(self, image, boxes=None, labels=None):
         if random.randint(2):
+            # H in HSV
             image[:, :, 0] += random.uniform(-self._delta, self._delta)
+            # prevent out of 0.0 - 360.0 range
             image[:, :, 0][image[:, :, 0] > 360.0] -= 360.0
             image[:, :, 0][image[:, :, 0] < 0.0] += 360.0
         return image, boxes, labels
@@ -223,8 +232,7 @@ class RandomContrast:
 
     def __call__(self, image, boxes=None, labels=None):
         if random.randint(2):
-            alpha = random.uniform(self._lower, self._upper)
-            image *= alpha
+            image *= random.uniform(self._lower, self._upper)
         return image, boxes, labels
 
 
@@ -235,8 +243,7 @@ class RandomBrightness:
 
     def __call__(self, image, boxes=None, labels=None):
         if random.randint(2):
-            delta = random.uniform(-self._delta, self._delta)
-            image += delta
+            image += random.uniform(-self._delta, self._delta)
         return image, boxes, labels
 
 

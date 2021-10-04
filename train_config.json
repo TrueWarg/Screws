@@ -3,7 +3,7 @@
   "train_image_ids_path": "ImageSets/Main/trainval.txt",
   "validation_dataset_path": "/home/truewarg/data/fake-test-3/VOC2007-fake-3/",
   "validation_image_ids_path": "ImageSets/Main/test.txt",
-  "labels_file": "/home/truewarg/data/VOC2007-fake-3/Labels/labels.txt",
+  "labels_path": "/home/truewarg/data/VOC2007-fake-3/Labels/labels.txt",
   "base_net_path": "models/mobilenet_v1_with_relu_69_5.pth",
   "checkpoint_folder_path": "checkpoint",
   "batch_size": 8,
