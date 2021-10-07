@@ -2,7 +2,7 @@
   "dataset_path": "/home/truewarg/data/fake-test-3/VOC2007-fake-3/",
   "image_ids_path": "ImageSets/Main/test.txt",
   "labels_path": "/home/truewarg/data/VOC2007-fake-3/Labels/labels.txt",
-  "trained_model_path": "checkpoint/mobilev1-ssd-Epoch-190-Loss-1.4460268199443818.pth",
+  "trained_model_path": "checkpoint/mobilev1-ssd-Epoch-150-Loss-1.424936149517695.pth",
   "results_path": "eval_results",
   "iou_threshold": 0.5
 }

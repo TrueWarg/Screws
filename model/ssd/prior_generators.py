@@ -38,10 +38,11 @@ def generate_with_rotations(origin_box: List, rotation_step: int) -> List:
     return rboxes
 
 
-def generate_rotated_prior_boxes(input_size: int, params: SsdBoxGenParams, clamp=True):
+def generate_rotated_prior_boxes(input_size: int, params: SsdBoxGenParams):
     priors = []
     scale = input_size / params.shrinkage
     for i, j in itertools.product(range(params.feature_map_size), repeat=2):
+        # For square with side = 1 just add 0.5 to find center
         x_center = (i + 0.5) / scale
         y_center = (j + 0.5) / scale
 
@@ -77,12 +78,18 @@ def generate_rotated_prior_boxes(input_size: int, params: SsdBoxGenParams, clamp
 
 
 def generate_ssd_priors(specs: List[SsdBoxGenParams], image_size, clamp=True) -> torch.Tensor:
+    """
+    Generate priors with relative to the image size
+    :param specs: list of gen params
+    :param image_size: size of image
+    :param clamp: if clamp is True values will be in between [0.0, 1.0]
+    :return: tensor of priors [center_x, center_y, w, h, alpha]
+    """
     priors = []
     for spec in specs:
         priors.extend(generate_rotated_prior_boxes(image_size, spec))
 
     priors = torch.tensor(priors)
-    # priors = priors[priors.shape[0] - 3000:priors.shape[0]]
     if clamp:
         low = torch.tensor([[0.0, 0.0, 0.0, 0.0, -math.pi]])
         high = torch.tensor([[1.0, 1.0, 1.0, 1.0, math.pi]])

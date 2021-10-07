@@ -4,13 +4,13 @@ from bbox.metrics import iou
 
 
 def hard_nms(
-        box_and_scores: torch.Tensor,
+        boxes_and_scores: torch.Tensor,
         iou_threshold: float,
         top_k=-1,
         candidate_size=200,
 ):
-    scores = box_and_scores[:, -1]
-    boxes = box_and_scores[:, :-1]
+    scores = boxes_and_scores[:, -1]
+    boxes = boxes_and_scores[:, :-1]
     picked = []
     _, indices = scores.sort(descending=True)
     indices = indices[:candidate_size]
@@ -28,4 +28,4 @@ def hard_nms(
         )
         indices = indices[ious <= iou_threshold]
 
-    return box_and_scores[picked, :]
+    return boxes_and_scores[picked, :]

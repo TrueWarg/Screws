@@ -1,4 +1,3 @@
-from collections import namedtuple
 from typing import List, Tuple
 
 import torch
@@ -6,8 +5,6 @@ import torch.nn.functional as F
 from torch import nn
 
 from bbox import converters
-
-GraphPath = namedtuple("GraphPath", ['s0', 'name', 's1'])
 
 
 class SSD(nn.Module):
@@ -42,6 +39,11 @@ class SSD(nn.Module):
         start_layer_index = 0
         header_index = 0
         end_layer_index = 0
+        # -------------------base-net-layers------------------
+        # 1. start | | | | | | end | | | | | | | | | | | | | |
+        #     x -> |         |  x* -> headers(x*)
+        # 2      | | | | | | | start  | | | | | | | | | end | |
+        #                       x* -> |               |  -> headers(x*)
         for end_layer_index in self._source_layer_indices:
             for layer in self.base_net[start_layer_index: end_layer_index]:
                 x = layer(x)
@@ -69,7 +71,9 @@ class SSD(nn.Module):
 
     def _compute_header(self, index, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         confidence = self.classification_headers[index](x)
+        # swap channels and size
         confidence = confidence.permute(0, 2, 3, 1).contiguous()
+        # reshape as (batch size (size(0)), predictions_count, num classes)
         confidence = confidence.view(confidence.size(0), -1, self._num_classes)
 
         location = self.regression_headers[index](x)
