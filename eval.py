@@ -1,12 +1,12 @@
 import json
 import os
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Tuple, Dict
 
 import numpy as np
 import torch
 
-from bbox.metrics import iou
+from bbox.metrics import iou, compute_average_precision_per_class
 from dataset.augmentation.transforms import TestTransform, PredictionTransform
 from dataset.voc_dataset import Config, VOCDataset, BACKGROUND_CLASS_LABEL, BACKGROUND_CLASS_ID
 from file_readers import read_image_ids, read_class_label
@@ -103,94 +103,6 @@ def _grouped_annotation_by_class(dataset: VOCDataset) -> Tuple:
     return not_difficult_cases_count_by_class_id, all_gt_boxes, all_difficult_cases
 
 
-def _compute_average_precision_per_class(
-        num_true_cases,
-        gt_boxes,
-        difficult_cases,
-        prediction_file,
-        iou_threshold,
-        use_2007_metric,
-):
-    with open(prediction_file) as f:
-        image_ids = []
-        boxes = []
-        scores = []
-        for line in f:
-            t = line.rstrip().split(" ")
-            image_ids.append(t[0])
-            scores.append(float(t[1]))
-            box = torch.tensor([float(v) for v in t[2:]]).unsqueeze(0)
-            box -= 1.0  # convert to python format where indexes start from 0
-            boxes.append(box)
-        scores = np.array(scores)
-        sorted_indexes = np.argsort(-scores)
-        boxes = [boxes[i] for i in sorted_indexes]
-        image_ids = [image_ids[i] for i in sorted_indexes]
-        true_positive = np.zeros(len(image_ids))
-        false_positive = np.zeros(len(image_ids))
-        matched = set()
-        for i, image_id in enumerate(image_ids):
-            box = boxes[i]
-            if image_id not in gt_boxes:
-                false_positive[i] = 1
-                continue
-
-            gt_box = gt_boxes[image_id]
-            # ious = box_utils.iou_of(box, gt_box) * torch.cos(box[..., 4] - gt_box[..., 4])
-            ious = iou(box, gt_box)
-            max_iou = torch.max(ious).item()
-            max_arg = torch.argmax(ious).item()
-            if max_iou > iou_threshold:
-                if difficult_cases[image_id][max_arg] == 0:
-                    if (image_id, max_arg) not in matched:
-                        true_positive[i] = 1
-                        matched.add((image_id, max_arg))
-                    else:
-                        false_positive[i] = 1
-            else:
-                false_positive[i] = 1
-
-    true_positive = true_positive.cumsum()
-    false_positive = false_positive.cumsum()
-    precision = true_positive / (true_positive + false_positive)
-    recall = true_positive / num_true_cases
-    if use_2007_metric:
-        return _compute_voc2007_average_precision(precision, recall)
-    else:
-        return _compute_average_precision(precision, recall)
-
-
-def _compute_average_precision(precision, recall):
-    """
-    It computes average precision based on the definition of Pascal Competition. It computes the under curve area
-    of precision and recall. Recall follows the normal definition. Precision is a variant.
-    pascal_precision[i] = typical_precision[i:].max()
-    """
-    # identical but faster version of new_precision[i] = old_precision[i:].max()
-    precision = np.concatenate([[0.0], precision, [0.0]])
-    for i in range(len(precision) - 1, 0, -1):
-        precision[i - 1] = np.maximum(precision[i - 1], precision[i])
-
-    # find the index where the value changes
-    recall = np.concatenate([[0.0], recall, [1.0]])
-    changing_points = np.where(recall[1:] != recall[:-1])[0]
-
-    # compute under curve area
-    areas = (recall[changing_points + 1] - recall[changing_points]) * precision[changing_points + 1]
-    return areas.sum()
-
-
-def _compute_voc2007_average_precision(precision, recall):
-    ap = 0.
-    for t in np.arange(0., 1.1, 0.1):
-        if np.sum(recall >= t) == 0:
-            p = 0
-        else:
-            p = np.max(precision[recall >= t])
-        ap = ap + p / 11.
-    return ap
-
-
 if __name__ == '__main__':
     eval_config = _read_config()
 
@@ -237,8 +149,6 @@ if __name__ == '__main__':
         filter_threshold=0.01
     )
 
-    not_difficult_cases_count_by_class_id, all_gb_boxes, all_difficult_cases = _grouped_annotation_by_class(dataset)
-
     results = []
     # index ~ index of image ids
     for index in range(len(dataset)):
@@ -253,7 +163,7 @@ if __name__ == '__main__':
             indices,
             class_ids.reshape(-1, 1).float(),
             scores.reshape(-1, 1),
-            boxes + 1.0  # matlab's indices start from 1
+            boxes
         ], dim=1))
 
     # shape: (all_predictions_count_for_all_dataset, 8),
@@ -280,18 +190,18 @@ if __name__ == '__main__':
 
     average_precisions = []
     print("\n\nAverage Precision Per-class:")
+    not_difficult_cases_count_by_class_id, all_gb_boxes, all_difficult_cases = _grouped_annotation_by_class(dataset)
     for class_id, class_label in enumerate(dataset_config.class_labels):
         # ignore background
         if class_id == BACKGROUND_CLASS_ID:
             continue
         prediction_path = os.path.join(eval_config.results_path, f'detection_{class_label}.txt')
-        average_precision = _compute_average_precision_per_class(
+        average_precision = compute_average_precision_per_class(
             not_difficult_cases_count_by_class_id[class_id],
             all_gb_boxes[class_id],
             all_difficult_cases[class_id],
             prediction_path,
             eval_config.iou_threshold,
-            True
         )
         average_precisions.append(average_precision)
         print(f"{class_label}: {average_precision}")
