@@ -1,6 +1,7 @@
 import json
 import os
 from dataclasses import dataclass
+from typing import Tuple
 
 import numpy as np
 import torch
@@ -45,40 +46,62 @@ def _read_config() -> EvalConfig:
     )
 
 
-def _group_annotation_by_class(dataset: VOCDataset):
-    true_case_stat = {}
+def _group_annotation_by_class(dataset: VOCDataset) -> Tuple:
+    """
+    Make grouping annotations:
+
+    all_gt_boxes = {
+      class_index_0 : { image_id_0 : [box_0, ... box_n], image_id_1 : [box_0, ...], ...},
+
+      class_index_1 : { image_id_0 : [box_0, ... box_n], image_id_1 : [box_0, ...], ...}
+
+    }
+
+    all_difficult_cases = {
+      class_index_0 : { image_id_0 : [box_0_is_difficult, ...], image_id_1 : [box_0_is_difficult, ...], ...},
+
+      class_index_1 : { image_id_0 : [box_0_is_difficult, ... ], image_id_1 : [box_0_is_difficult, ...], ...}
+
+    }
+
+    :param dataset: voc dataset
+    :return: (not_difficult_cases_count_by_class_id, all_gt_boxes, all_difficult_cases)
+    """
+    not_difficult_cases_count_by_class_id = {}
     all_gt_boxes = {}
     all_difficult_cases = {}
     for annotation_index in range(len(dataset)):
         image_id, annotation = dataset.get_annotation(annotation_index)
-        gt_boxes, classes, is_difficult = annotation
+        gt_boxes, classes, difficult_cases = annotation
         gt_boxes = torch.from_numpy(gt_boxes)
 
-        for difficult_index, difficult in enumerate(is_difficult):
-            class_index = int(classes[difficult_index])
-            gt_box = gt_boxes[difficult_index]
+        for index in range(0, len(classes)):
+            class_id = int(classes[index])
+            gt_box = gt_boxes[index]
+            difficult = difficult_cases[index]
             if not difficult:
-                true_case_stat[class_index] = true_case_stat.get(class_index, 0) + 1
+                not_difficult_cases_count_by_class_id[class_id] = \
+                    not_difficult_cases_count_by_class_id.get(class_id, 0) + 1
 
-            if class_index not in all_gt_boxes:
-                all_gt_boxes[class_index] = {}
-            if image_id not in all_gt_boxes[class_index]:
-                all_gt_boxes[class_index][image_id] = []
+            if class_id not in all_gt_boxes:
+                all_gt_boxes[class_id] = {}
+            if image_id not in all_gt_boxes[class_id]:
+                all_gt_boxes[class_id][image_id] = []
 
-            all_gt_boxes[class_index][image_id].append(gt_box)
+            all_gt_boxes[class_id][image_id].append(gt_box)
 
-            if class_index not in all_difficult_cases:
-                all_difficult_cases[class_index] = {}
-            if image_id not in all_difficult_cases[class_index]:
-                all_difficult_cases[class_index][image_id] = []
+            if class_id not in all_difficult_cases:
+                all_difficult_cases[class_id] = {}
+            if image_id not in all_difficult_cases[class_id]:
+                all_difficult_cases[class_id][image_id] = []
 
-            all_difficult_cases[class_index][image_id].append(difficult)
+            all_difficult_cases[class_id][image_id].append(difficult)
 
-    for class_index in all_gt_boxes:
-        for image_id in all_gt_boxes[class_index]:
-            all_gt_boxes[class_index][image_id] = torch.stack(all_gt_boxes[class_index][image_id])
+    for class_id in all_gt_boxes:
+        for image_id in all_gt_boxes[class_id]:
+            all_gt_boxes[class_id][image_id] = torch.stack(all_gt_boxes[class_id][image_id])
 
-    return true_case_stat, all_gt_boxes, all_difficult_cases
+    return not_difficult_cases_count_by_class_id, all_gt_boxes, all_difficult_cases
 
 
 def _compute_average_precision_per_class(
@@ -191,7 +214,7 @@ if __name__ == '__main__':
     config = mobileV1_ssd_config.CONFIG
     priors = mobileV1_ssd_config.priors
 
-    target_transform = RotatedPriorMatcher(priors, config.center_variance, config.size_variance, 0.5)
+    target_transform = RotatedPriorMatcher(priors, config.center_variance, config.size_variance, iou_threshold=0.5)
     test_transform = TestTransform(config.image_size, config.image_mean, config.image_std)
 
     dataset = VOCDataset(dataset_config)

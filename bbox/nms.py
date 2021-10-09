@@ -15,16 +15,16 @@ def hard_nms(
     _, indices = scores.sort(descending=True)
     indices = indices[:candidate_size]
     while len(indices) > 0:
-        current = indices[0]
-        picked.append(current.item())
+        current_index = indices[0]
+        picked.append(current_index.item())
         if 0 < top_k == len(picked) or len(indices) == 1:
             break
-        current_box = boxes[current, :]
+        current_max_scored_box = boxes[current_index, :]
         indices = indices[1:]
         rest_boxes = boxes[indices, :]
         ious = iou(
             rest_boxes,
-            current_box.unsqueeze(0),
+            current_max_scored_box.unsqueeze(0),
         )
         indices = indices[ious <= iou_threshold]
 
