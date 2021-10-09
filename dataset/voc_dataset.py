@@ -7,6 +7,9 @@ import cv2
 import numpy as np
 from torch.utils.data import Dataset
 
+BACKGROUND_CLASS_LABEL = 'BACKGROUND'
+BACKGROUND_CLASS_ID = 0
+
 
 @dataclass()
 class Config:
@@ -26,20 +29,20 @@ class VOCDataset(Dataset):
         self._root_path = config.root_path
         self._transform = transform
         self._target_transform = target_transform
-        self._classes = {class_label: i for i, class_label in enumerate(config.class_labels)}
+        self._classes = {class_label: class_id for class_id, class_label in enumerate(config.class_labels)}
 
     def __getitem__(self, index: int):
         image_id = self._config.image_ids[index]
-        boxes, labels, is_difficult = self._extract_annotations(image_id)
+        boxes, class_ids, is_difficult = self._extract_annotations(image_id)
         if not self._config.skip_difficult:
             boxes = boxes[is_difficult == 0]
-            labels = labels[is_difficult == 0]
+            class_ids = class_ids[is_difficult == 0]
         image = self._read_image(image_id)
         if self._transform:
-            image, boxes, labels = self._transform(image, boxes, labels)
+            image, boxes, class_ids = self._transform(image, boxes, class_ids)
         if self._target_transform:
-            boxes, labels = self._target_transform(boxes, labels)
-        return image, boxes, labels
+            boxes, class_ids = self._target_transform(boxes, class_ids)
+        return image, boxes, class_ids
 
     def _extract_annotations(self, image_id: str):
         annotation_path = os.path.join(
@@ -49,20 +52,20 @@ class VOCDataset(Dataset):
         )
         elements = ET.parse(annotation_path).findall("object")
         boxes = []
-        labels = []
+        class_ids = []
         is_difficult = []
 
         for element in elements:
             class_name = element.find('name').text.lower().strip()
             bbox = self._extract_bbox(element)
             boxes.append(bbox)
-            labels.append(self._classes[class_name])
+            class_ids.append(self._classes[class_name])
             is_difficult_str = element.find('difficult').text
             is_difficult.append(int(is_difficult_str) if is_difficult_str else 0)
 
         return (
             np.array(boxes, dtype=np.float32),
-            np.array(labels, dtype=np.int64),
+            np.array(class_ids, dtype=np.int64),
             np.array(is_difficult, dtype=np.uint8),
         )
 

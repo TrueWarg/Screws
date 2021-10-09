@@ -8,7 +8,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 
 from dataset.augmentation.transforms import TestTransform, TrainTransform
-from dataset.voc_dataset import VOCDataset, Config
+from dataset.voc_dataset import VOCDataset, Config, BACKGROUND_CLASS_LABEL
 from file_readers import read_image_ids, read_class_label
 from fitter import Fitter
 from model.ssd.box_losses import RotatedMultiboxLoss
@@ -17,7 +17,6 @@ from model.ssd.mobilenet.mobileV1_ssd import create_mobilenetv1_ssd
 from model.ssd.prior_matcher import RotatedPriorMatcher
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-BACKGROUND_CLASS = 'BACKGROUND'
 
 
 @dataclass()
@@ -78,7 +77,7 @@ if __name__ == '__main__':
     test_transform = TestTransform(config.image_size, config.image_mean, config.image_std)
 
     class_labels = read_class_label(train_config.labels_path)
-    class_labels.insert(0, BACKGROUND_CLASS)
+    class_labels.insert(0, BACKGROUND_CLASS_LABEL)
     num_classes = len(class_labels)
 
     train_dataset_config = Config(

@@ -54,15 +54,15 @@ class Fitter:
         self._net.train(True)
 
         for i, data in enumerate(self._train_data_loader):
-            images, boxes, labels = data
+            images, boxes, class_ids = data
             images = images.to(self._device)
             boxes = boxes.to(self._device)
-            labels = labels.to(self._device)
+            class_ids = class_ids.to(self._device)
 
             self._optimizer.zero_grad()
             confidences, locations = self._net(images)
 
-            regression_loss, classification_loss = self._loss_function(confidences, locations, labels, boxes)
+            regression_loss, classification_loss = self._loss_function(confidences, locations, class_ids, boxes)
             loss = regression_loss + classification_loss
             loss.backward()
             self._optimizer.step()
@@ -76,15 +76,15 @@ class Fitter:
         running_classification_loss = 0.0
         samples_count = 0
         for _, data in enumerate(self._validation_data_loader):
-            images, boxes, labels = data
+            images, boxes, class_ids = data
             images = images.to(self._device)
             boxes = boxes.to(self._device)
-            labels = labels.to(self._device)
+            class_ids = class_ids.to(self._device)
             samples_count += 1
 
             with torch.no_grad():
                 confidence, locations = self._net(images)
-                regression_loss, classification_loss = self._loss_function(confidence, locations, labels, boxes)
+                regression_loss, classification_loss = self._loss_function(confidence, locations, class_ids, boxes)
                 loss = regression_loss + classification_loss
 
             running_loss += loss.item()

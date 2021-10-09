@@ -2,6 +2,7 @@ import torch
 from torch import nn
 
 from bbox.nms import hard_nms
+from dataset.voc_dataset import BACKGROUND_CLASS_ID
 
 
 class Predictor:
@@ -39,10 +40,11 @@ class Predictor:
         picked_boxes_and_scores = []
         picked_labels = []
 
-        # loop over classes. start with 1 because background ignoring
-        # todo make more explict
-        for class_index in range(1, scores.size(1)):
-            subset_scores = scores[:, class_index]
+        for class_id in range(scores.size(1)):
+            # ignore bg class
+            if class_id == BACKGROUND_CLASS_ID:
+                continue
+            subset_scores = scores[:, class_id]
             mask = subset_scores > self._filter_threshold
             print(f" probs {subset_scores.max()}")
             subset_scores = subset_scores[mask]
@@ -60,7 +62,7 @@ class Predictor:
                 candidate_size=self._candidate_size
             )
             picked_boxes_and_scores.append(boxes_and_scores)
-            picked_labels.extend([class_index] * boxes_and_scores.size(0))
+            picked_labels.extend([class_id] * boxes_and_scores.size(0))
 
         if not picked_boxes_and_scores:
             return torch.tensor([]), torch.tensor([]), torch.tensor([])

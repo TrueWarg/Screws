@@ -8,7 +8,7 @@ import torch
 
 from bbox.metrics import iou
 from dataset.augmentation.transforms import TestTransform, PredictionTransform
-from dataset.voc_dataset import Config, VOCDataset
+from dataset.voc_dataset import Config, VOCDataset, BACKGROUND_CLASS_LABEL, BACKGROUND_CLASS_ID
 from file_readers import read_image_ids, read_class_label
 from model.ssd.mobilenet import mobileV1_ssd_config
 from model.ssd.mobilenet.mobileV1_ssd import create_mobilenetv1_ssd
@@ -18,7 +18,6 @@ from model.ssd.prior_matcher import RotatedPriorMatcher
 from model.ssd.ssd import SSDTest
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-BACKGROUND_CLASS = 'BACKGROUND'
 
 
 @dataclass()
@@ -46,7 +45,7 @@ def _read_config() -> EvalConfig:
     )
 
 
-def _group_annotation_by_class(dataset: VOCDataset) -> Tuple:
+def _grouped_annotation_by_class(dataset: VOCDataset) -> Tuple:
     """
     Make grouping annotations:
 
@@ -75,7 +74,7 @@ def _group_annotation_by_class(dataset: VOCDataset) -> Tuple:
         gt_boxes, classes, difficult_cases = annotation
         gt_boxes = torch.from_numpy(gt_boxes)
 
-        for index in range(0, len(classes)):
+        for index in range(len(classes)):
             class_id = int(classes[index])
             gt_box = gt_boxes[index]
             difficult = difficult_cases[index]
@@ -198,7 +197,7 @@ if __name__ == '__main__':
     images_ids = read_image_ids(os.path.join(eval_config.dataset_path, eval_config.image_ids_path))
 
     class_labels = read_class_label(eval_config.labels_path)
-    class_labels.insert(0, BACKGROUND_CLASS)
+    class_labels.insert(0, BACKGROUND_CLASS_LABEL)
 
     dataset_config = Config(
         root_path=eval_config.dataset_path,
@@ -229,8 +228,6 @@ if __name__ == '__main__':
     )
     net = net.to(DEVICE)
 
-    true_case_stat, all_gb_boxes, all_difficult_cases = _group_annotation_by_class(dataset)
-
     predictor = Predictor(
         net=net,
         transform=PredictionTransform(CONFIG.image_size, CONFIG.image_mean, CONFIG.image_std),
@@ -240,48 +237,63 @@ if __name__ == '__main__':
         filter_threshold=0.01
     )
 
+    not_difficult_cases_count_by_class_id, all_gb_boxes, all_difficult_cases = _grouped_annotation_by_class(dataset)
+
     results = []
-    for i in range(len(dataset)):
-        print("process image", i)
-        image = dataset.get_image(i)
-        boxes, labels, probs = predictor.predict(image)
-        indexes = torch.ones(labels.size(0), 1, dtype=torch.float32) * i
+    # index ~ index of image ids
+    for index in range(len(dataset)):
+        print('Process image', index)
+        image = dataset.get_image(index)
+        boxes, class_ids, scores = predictor.predict(image)
+        predictions_count = class_ids.size(0)
+        indices = torch.ones(predictions_count, 1, dtype=torch.float32) * index
+
+        # shape: (predictions_count, 8), where 8: (sample_index, class_id, score, x_min, y_min, x_max, y_max, angle)
         results.append(torch.cat([
-            indexes.reshape(-1, 1),
-            labels.reshape(-1, 1).float(),
-            probs.reshape(-1, 1),
-            boxes + 1.0
+            indices,
+            class_ids.reshape(-1, 1).float(),
+            scores.reshape(-1, 1),
+            boxes + 1.0  # matlab's indices start from 1
         ], dim=1))
+
+    # shape: (all_predictions_count_for_all_dataset, 8),
+    # where 8: (sample_index, class_id, score, x_min, y_min, x_max, y_max, angle)
     results = torch.cat(results)
-    for class_index, class_label in enumerate(dataset_config.class_labels):
-        if class_index == 0:
-            continue  # ignore background
+    for class_id, class_label in enumerate(dataset_config.class_labels):
+        # ignore background
+        if class_id == BACKGROUND_CLASS_ID:
+            continue
         prediction_path = os.path.join(eval_config.results_path, f'detection_{class_label}.txt')
 
         with open(prediction_path, "w") as f:
-            sub = results[results[:, 1] == class_index, :]
+            # 1 - index of class id
+            sub = results[results[:, 1] == class_id, :]
+            # loop over all samples for current class
             for i in range(sub.size(0)):
-                prob_box = sub[i, 2:].numpy()
+                score_and_box = sub[i, 2:].numpy()
+                # index ~ index of image ids list
                 image_id = dataset_config.image_ids[int(sub[i, 0])]
                 print(
-                    image_id + " " + " ".join([str(v) for v in prob_box]),
+                    image_id + " " + " ".join([str(v) for v in score_and_box]),
                     file=f
                 )
-    aps = []
+
+    average_precisions = []
     print("\n\nAverage Precision Per-class:")
-    for class_index, class_label in enumerate(dataset_config.class_labels):
-        if class_index == 0:
+    for class_id, class_label in enumerate(dataset_config.class_labels):
+        # ignore background
+        if class_id == BACKGROUND_CLASS_ID:
             continue
         prediction_path = os.path.join(eval_config.results_path, f'detection_{class_label}.txt')
-        ap = _compute_average_precision_per_class(
-            true_case_stat[class_index],
-            all_gb_boxes[class_index],
-            all_difficult_cases[class_index],
+        average_precision = _compute_average_precision_per_class(
+            not_difficult_cases_count_by_class_id[class_id],
+            all_gb_boxes[class_id],
+            all_difficult_cases[class_id],
             prediction_path,
             eval_config.iou_threshold,
             True
         )
-        aps.append(ap)
-        print(f"{class_label}: {ap}")
+        average_precisions.append(average_precision)
+        print(f"{class_label}: {average_precision}")
 
-    print(f"\nAverage Precision Across All Classes:{sum(aps) / len(aps)}")
+    print(f"\nAverage Precision Across All Classes:{sum(average_precisions) / len(average_precisions)}")

@@ -9,7 +9,7 @@ from bbox.metrics import rotated_xyxy_iou
 
 
 def _assign_targets_for_priors(target_boxes: torch.Tensor,
-                               target_categories: torch.Tensor,
+                               target_class_ids: torch.Tensor,
                                priors: torch.Tensor,
                                riou_threshold: float) -> Tuple:
     """
@@ -31,12 +31,12 @@ def _assign_targets_for_priors(target_boxes: torch.Tensor,
     # (row in matrix == indices of best_prior_per_target_values list) that
     # indicate max ious both in best_prior_per_target_values and best_target_per_prior_values
     best_target_per_prior_values.index_fill_(0, best_prior_per_target_indices, 1)
-    labels = target_categories[best_target_per_prior_indices]
+    class_ids = target_class_ids[best_target_per_prior_indices]
     # the background id
-    labels[best_target_per_prior_values < riou_threshold] = 0
+    class_ids[best_target_per_prior_values < riou_threshold] = 0
     boxes = target_boxes[best_target_per_prior_indices]
 
-    return boxes, labels
+    return boxes, class_ids
 
 
 class RotatedPriorMatcher:
@@ -47,13 +47,14 @@ class RotatedPriorMatcher:
         self._size_variance = size_variance
         self._iou_threshold = iou_threshold
 
-    def __call__(self, gt_boxes, gt_labels):
+    def __call__(self, gt_boxes, gt_class_ids):
         if type(gt_boxes) is np.ndarray:
             gt_boxes = torch.from_numpy(gt_boxes)
-        if type(gt_labels) is np.ndarray:
-            gt_labels = torch.from_numpy(gt_labels)
+        if type(gt_class_ids) is np.ndarray:
+            gt_class_ids = torch.from_numpy(gt_class_ids)
 
-        boxes, labels = _assign_targets_for_priors(gt_boxes, gt_labels, self._corner_form_priors, self._iou_threshold)
+        boxes, class_ids = _assign_targets_for_priors(gt_boxes, gt_class_ids, self._corner_form_priors,
+                                                      self._iou_threshold)
         boxes = corner_form_to_center_form(boxes)
         locations = boxes_to_locations(
             boxes,
@@ -61,4 +62,4 @@ class RotatedPriorMatcher:
             self._center_variance,
             self._size_variance,
         )
-        return locations, labels
+        return locations, class_ids
