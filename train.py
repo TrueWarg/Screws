@@ -135,8 +135,6 @@ if __name__ == '__main__':
 
     fitter = Fitter(
         net=net,
-        train_data_loader=train_loader,
-        validation_data_loader=val_loader,
         loss_function=loss_function,
         optimizer=optimizer,
         device=DEVICE,
@@ -144,10 +142,19 @@ if __name__ == '__main__':
 
     for epoch in range(last_epoch + 1, train_config.num_epochs):
         scheduler.step()
-        fitter.train()
+        fitter.train(train_loader)
         print(f'Epoch: {epoch}')
         if epoch != 0 and epoch % train_config.validation_step == 0:
-            val_loss, val_regression_loss, val_classification_loss = fitter.validate()
+            # todo move in config
+            train_loss, train_regression_loss, train_classification_loss = fitter.validate(train_loader)
+            val_loss, val_regression_loss, val_classification_loss = fitter.validate(val_loader)
+
+            print(
+                f'Train Loss: {train_loss:.8f}\n' +
+                f'Train Regression Loss: {train_regression_loss:.8f}\n' +
+                f'Train Classification Loss: {train_classification_loss:.8f}\n'
+            )
+
             print(
                 f'Validation Loss: {val_loss:.8f}\n' +
                 f'Validation Regression Loss: {val_regression_loss:.8f}\n' +

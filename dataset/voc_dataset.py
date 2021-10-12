@@ -71,11 +71,10 @@ class VOCDataset(Dataset):
 
     def _extract_bbox(self, element) -> List:
         bbox = element.find('bndbox')
-        # Voc from Matlab, which indices start from 0
-        x_min = float(bbox.find('xmin').text) - 1
-        y_min = float(bbox.find('ymin').text) - 1
-        x_max = float(bbox.find('xmax').text) - 1
-        y_max = float(bbox.find('ymax').text) - 1
+        x_min = float(bbox.find('xmin').text)
+        y_min = float(bbox.find('ymin').text)
+        x_max = float(bbox.find('xmax').text)
+        y_max = float(bbox.find('ymax').text)
         angle = float(bbox.find('angle').text)
         return [x_min, y_min, x_max, y_max, angle]
 
