@@ -32,8 +32,6 @@ class TrainLogger:
 class Fitter:
     def __init__(self,
                  net,
-                 train_data_loader,
-                 validation_data_loader,
                  loss_function,
                  optimizer,
                  device,
@@ -41,8 +39,6 @@ class Fitter:
                  debug_step=5,
                  ):
         self._net = net
-        self._train_data_loader = train_data_loader
-        self._validation_data_loader = validation_data_loader
         self._loss_function = loss_function
         self._optimizer = optimizer
         self._device = device
@@ -50,10 +46,10 @@ class Fitter:
         if log_training:
             self._logger = TrainLogger(debug_step=debug_step)
 
-    def train(self):
+    def train(self, data_loader):
         self._net.train(True)
 
-        for i, data in enumerate(self._train_data_loader):
+        for i, data in enumerate(data_loader):
             images, boxes, class_ids = data
             images = images.to(self._device)
             boxes = boxes.to(self._device)
@@ -69,13 +65,13 @@ class Fitter:
             if self._log_training and self._logger:
                 self._logger.apply_log_step(loss, regression_loss, classification_loss, current_step=i)
 
-    def validate(self):
+    def validate(self, data_loader):
         self._net.eval()
         running_loss = 0.0
         running_regression_loss = 0.0
         running_classification_loss = 0.0
         samples_count = 0
-        for _, data in enumerate(self._validation_data_loader):
+        for _, data in enumerate(data_loader):
             images, boxes, class_ids = data
             images = images.to(self._device)
             boxes = boxes.to(self._device)
