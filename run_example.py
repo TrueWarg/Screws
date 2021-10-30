@@ -14,10 +14,17 @@ from train import DEVICE
 
 
 def demo():
-    model_path = 'checkpoint/mobilev1-ssd-Epoch-130-Loss-1.2848798424005508.pth'
-    image_path = '/home/truewarg/data/fake-test-3/VOC2007-fake-3/JPEGImages/image_102.png'
+    model_path = 'checkpoint/mobilev1-ssd-Epoch-15-Loss-11.395224253336588.pth'
+    image_path = '/home/truewarg/data/VOC2007-test/JPEGImages/screws_164.png'
 
-    class_labels = ('BACKGROUND', 'red', 'green', 'blue')
+    # class_labels = ('BACKGROUND', 'red', 'green', 'blue')
+    class_labels = ('BACKGROUND',
+                    'type_001', 'type_002', 'type_003',
+                    'type_004', 'type_005', 'type_006',
+                    'type_007', 'type_008', 'type_009',
+                    'type_010', 'type_011', 'type_012',
+                    'type_013',
+                    )
 
     net = create_mobilenetv1_ssd(len(class_labels))
     net.load(model_path)

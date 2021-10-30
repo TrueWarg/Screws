@@ -1,7 +1,7 @@
 from enum import Enum
 
 from numpy import random
-from typing import List
+from typing import List, Tuple
 
 import cv2
 import numpy as np
@@ -21,7 +21,7 @@ class TrainTransform:
             ConvertToFloat32(),
             PhotometricDistortion(),
             ToPercentCoordinates(),
-            Resize(image_size),
+            ResizeImageOnly(image_size),
             SubtractMeans(mean),
             lambda image, boxes=None, class_ids=None: (image / std, boxes, class_ids),
             ToTensor(),
@@ -41,7 +41,7 @@ class TestTransform:
         """
         self._transforms = Compose([
             ToPercentCoordinates(),
-            Resize(image_size),
+            ResizeImageOnly(image_size),
             SubtractMeans(mean),
             lambda image, boxes=None, class_ids=None: (image / std, boxes, class_ids),
             ToTensor(),
@@ -61,7 +61,7 @@ class PredictionTransform:
             std: std pixel value per channel
         """
         self.transform = Compose([
-            Resize(image_size),
+            ResizeImageOnly(image_size),
             SubtractMeans(mean),
             lambda image, boxes=None, class_ids=None: (image / std, boxes, class_ids),
             ToTensor()
@@ -77,13 +77,37 @@ class ToTensor:
         return torch.from_numpy(image.astype(np.float32)).permute(2, 0, 1), boxes, class_ids
 
 
-class Resize:
+class ResizeImageOnly:
     def __init__(self, image_size: int):
         self._image_size = image_size
 
     def __call__(self, image, boxes=None, class_ids=None):
         image = cv2.resize(image, (self._image_size, self._image_size))
         return image, boxes, class_ids
+
+
+class Resize:
+    def __init__(self, size: Tuple):
+        self._size = size
+
+    def __call__(self, image, boxes=None, class_ids=None):
+        rw, rh = self._size
+        if boxes:
+            ih, iw = image.shape[:2]
+            bboxes = boxes * [rw / iw, rh / ih]
+            boxes = np.array([cv2.boxPoints(cv2.minAreaRect(bbox)) for bbox in bboxes.astype(np.float32)])
+        image = cv2.resize(image, (rw, rh), interpolation=cv2.INTER_LINEAR)
+        return image, boxes, class_ids
+
+
+class ResizeJitter:
+    def __init__(self, scale=(0.8, 1.2)):
+        self._scale = scale
+
+    def __call__(self, image, boxes=None, class_ids=None):
+        ih, iw = image.shape[:2]
+        rh, rw = [ih, iw] * np.random.uniform(*self._scale, 2)
+        return Resize((int(rw), int(rw)))(image, boxes, class_ids)
 
 
 class SubtractMeans:
@@ -94,6 +118,54 @@ class SubtractMeans:
         image = image.astype(np.float32)
         image -= self._mean
         return image.astype(np.float32), boxes, class_ids
+
+
+class Normalize:
+    def __init__(self, mean: float, std: float):
+        self._mean = mean
+        self._std = std
+
+    def __call__(self, image, boxes=None, class_ids=None):
+        image = (image - self._mean) / self._std
+        return image, boxes, class_ids
+
+
+class RandomHorizontalFlip:
+    def __call__(self, image, boxes=None, class_ids=None):
+        if np.random.randint(2):
+            if boxes:
+                ih, iw = image.shape[:2]
+                boxes[:, :, 0] = iw - 1 - boxes[:, :, 0]
+            image = np.ascontiguousarray(np.fliplr(image))
+        return image, boxes, class_ids
+
+
+class RandomVerticalFlip:
+    def __call__(self, image, boxes=None, class_ids=None):
+        if np.random.randint(2):
+            if boxes:
+                ih, iw = image.shape[:2]
+                boxes[:, :, 1] = ih - 1 - boxes[:, :, 1]
+            image = np.ascontiguousarray(np.flipud(image))
+        return image, boxes, class_ids
+
+
+class RandomRotate90:
+    def __call__(self, image, boxes=None, class_ids=None):
+        clockwise = np.random.choice((0, 1, 2, 3))
+        ih, iw = image.shape[:2]
+        if boxes:
+            if clockwise == 1:
+                boxes[:, :, 1] = ih - 1 - boxes[:, :, 1]
+                boxes = boxes[:, :, [1, 0]]
+            if clockwise == 2:
+                boxes = ([iw - 1, ih - 1] - boxes)
+            if clockwise == 3:
+                boxes[:, :, 0] = iw - 1 - boxes[:, :, 0]
+                boxes = boxes[:, :, [1, 0]]
+        if clockwise % 4 != 0:
+            image = np.ascontiguousarray(np.rot90(image, -clockwise))
+        return image, boxes, class_ids
 
 
 class ToPercentCoordinates:
@@ -150,6 +222,7 @@ class RandomSaturation:
     """
         Apply random saturation. HSV color model is expected.
     """
+
     def __init__(self, lower=0.5, upper=1.5):
         assert 0 <= lower <= upper, "lower must be in range 0.0 - upper"
 
@@ -168,6 +241,7 @@ class RandomHue:
     """
         Apply random hue. HSV color model is expected.
     """
+
     def __init__(self, delta=18.0):
         assert 0.0 <= delta <= 360.0, "delta must be range 0.0 - 360.0"
         self._delta = delta

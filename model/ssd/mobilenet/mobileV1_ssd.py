@@ -1,7 +1,6 @@
 from torch import nn
 from torch.nn import Conv2d, Sequential, ModuleList, ReLU
 
-from model.ssd.mobilenet.mobileV1_ssd_config import CONFIG
 from model.ssd.ssd import SSD
 
 
