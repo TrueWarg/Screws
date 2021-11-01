@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 
 
@@ -58,3 +59,55 @@ def corner_form_to_center_form(boxes: torch.Tensor) -> torch.Tensor:
         boxes[..., 2:4] - boxes[..., :2],
         boxes[..., 4:],
     ], boxes.dim() - 1)
+
+
+def vertex_form_to_center_form(boxes: np.ndarray) -> np.ndarray:
+    """
+    Convert vertex form box in center form box with angle 0 <= a < 180
+
+    :param boxes: [2DPoint, 2DPoint, 2DPoint, 2DPoint], where 2DPoint = [x, y]
+
+    :return: [x_center, y_center, width, height, angle]
+    """
+    x_center, y_center = np.mean(boxes, axis=0)
+    # sqrt( (x_2 - x_1)^2 + (y_2 - y_1)^2 )
+    diff01 = boxes[0] - boxes[1]
+    diff03 = boxes[0] - boxes[3]
+    w = np.sqrt(np.square(diff01).sum())
+    h = np.sqrt(np.square(diff03).sum())
+    # y = k*x + b, k = tg(a)
+    a = np.rad2deg(np.arctan2(diff01[1], diff01[0]))
+
+    # if a < 0 -> 180 - abs(a), if a == 180 or 360 -> 0
+    a = a % 180
+
+    return np.stack([x_center, y_center, w, h, a])
+
+
+def vertex_form_to_center_form_angle_bounded45(boxes: np.ndarray) -> np.ndarray:
+    """
+    Convert vertex form box in center form box with angle -45 <= a < 45
+
+    :param boxes: [2DPoint, 2DPoint, 2DPoint, 2DPoint], where 2DPoint = [x, y]
+
+    :return: [x_center, y_center, width, height, angle]
+    """
+    x_center, y_center = np.mean(boxes, axis=0)
+    # sqrt( (x_2 - x_1)^2 + (y_2 - y_1)^2 )
+    diff01 = boxes[0] - boxes[1]
+    diff03 = boxes[0] - boxes[3]
+    w = np.sqrt(np.square(diff01).sum())
+    h = np.sqrt(np.square(diff03).sum())
+    # y = k*x + b, k = tg(a)
+    a = np.rad2deg(np.arctan2(diff01[1], diff01[0]))
+
+    # if a < 0 -> 180 - abs(a), if a == 180 or 360 -> 0
+    a = a % 180
+
+    if 45 <= a < 135:
+        w, h = h, w
+        a -= 90
+    elif a >= 135:
+        a -= 180
+
+    return np.stack([x_center, y_center, w, h, a])
