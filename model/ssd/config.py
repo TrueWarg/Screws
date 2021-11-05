@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 
 
-@dataclass()
+@dataclass(frozen=True)
 class Config:
     image_size: int
     image_mean: np.ndarray

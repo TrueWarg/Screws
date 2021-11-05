@@ -11,7 +11,7 @@ BACKGROUND_CLASS_LABEL = 'BACKGROUND'
 BACKGROUND_CLASS_ID = 0
 
 
-@dataclass()
+@dataclass(frozen=True)
 class Config:
     root_path: str
     annotations_relative_path: str

@@ -19,7 +19,7 @@ from model.ssd.prior_matcher import RotatedPriorMatcher
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-@dataclass()
+@dataclass(frozen=True)
 class TrainConfig:
     train_dataset_path: str
     train_image_ids_path: str

@@ -6,7 +6,7 @@ import math
 from dataclasses import dataclass
 
 
-@dataclass()
+@dataclass(frozen=True)
 class SsdBoxGenParams:
     feature_map_size: int
     shrinkage: int

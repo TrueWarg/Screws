@@ -20,7 +20,7 @@ from model.ssd.ssd import SSDTest
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-@dataclass()
+@dataclass(frozen=True)
 class EvalConfig:
     dataset_path: str
     image_ids_path: str
