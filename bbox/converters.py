@@ -45,6 +45,14 @@ def boxes_to_locations(
     ], dim=center_form_boxes.dim() - 1)
 
 
+def xywh_to_xyxy(boxes: torch.Tensor) -> torch.Tensor:
+    return torch.cat([
+        boxes[..., :2] - boxes[..., 2:] / 2,
+        boxes[..., :2] + boxes[..., 2:] / 2,
+    ], boxes.dim() - 1)
+
+
+# todo: rename converter funcs
 def center_form_to_corner_form(boxes: torch.Tensor) -> torch.Tensor:
     return torch.cat([
         boxes[..., :2] - boxes[..., 2:4] / 2,
