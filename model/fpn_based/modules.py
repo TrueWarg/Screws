@@ -21,14 +21,14 @@ class PredictHead(nn.Module):
 
 
 class Detector(nn.Module):
-    def __init__(self, depth: int, plane_square: int, num_anchors: int, num_classes: int):
+    def __init__(self, depth: int, plane_square: int, priors_counts: List[int], num_classes: int):
         super(Detector, self).__init__()
         self.classification_heads = nn.ModuleList()
         self.location_heads = nn.ModuleList()
         for i in range(depth):
-            self.classification_heads.append(PredictHead(plane_square, num_anchors[i], num_classes))
+            self.classification_heads.append(PredictHead(plane_square, priors_counts[i], num_classes))
             # len([x, y, w, h, angle]) - bbox values
-            self.location_heads.append(PredictHead(plane_square, num_anchors[i], num_values=5))
+            self.location_heads.append(PredictHead(plane_square, priors_counts[i], num_values=5))
 
     def forward(self, features: List[torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         predicted_classes, predicted_locs = [], []
