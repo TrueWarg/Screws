@@ -31,13 +31,13 @@ class Detector(nn.Module):
             self.location_heads.append(PredictHead(plane_square, priors_counts[i], num_values=5))
 
     def forward(self, features: List[torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
-        predicted_classes, predicted_locs = [], []
+        predicted_class_scorers, predicted_locs = [], []
         for i, feature in enumerate(features):
-            predicted_classes.append(self.classification_heads[i](feature))
+            predicted_class_scorers.append(self.classification_heads[i](feature))
             predicted_locs.append(self.location_heads[i](feature))
-        predicted_classes = torch.cat(predicted_classes, dim=1)
+        predicted_class_scorers = torch.cat(predicted_class_scorers, dim=1)
         predicted_locs = torch.cat(predicted_locs, dim=1)
-        return predicted_classes, predicted_locs
+        return predicted_class_scorers, predicted_locs
 
 
 class FeaturePyramid(nn.Module):

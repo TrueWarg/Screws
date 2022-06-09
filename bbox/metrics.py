@@ -41,19 +41,19 @@ def iou(boxes_a: torch.Tensor, boxes_b: torch.Tensor, eps=1e-5):
         RIoU = (INTERSECTION / UNION)
 
     Args:
-        boxes_a:  bounding boxes with shape [N, 4 and with format xcycwha
-        boxes_b:  bounding boxes with shape [N, 4] and with format xcycwha
+        boxes_a:  bounding boxes with shape [N, 4 and with format xcycwh
+        boxes_b:  bounding boxes with shape [N, 4] and with format xcycwh
         eps: additional value to union
 
     Return:
          iou scores in [0.0 - 1.0] with shape [N, 4]
     """
     overlap_left_top = torch.max(boxes_a[..., :2], boxes_b[..., :2])
-    overlap_right_bottom = torch.min(boxes_a[..., 2:4], boxes_b[..., 2:4])
+    overlap_right_bottom = torch.min(boxes_a[..., 2:], boxes_b[..., 2:])
 
     overlap_area = area(overlap_left_top, overlap_right_bottom)
-    area_a = area(boxes_a[..., :2], boxes_a[..., 2:4])
-    area_b = area(boxes_b[..., :2], boxes_b[..., 2:4])
+    area_a = area(boxes_a[..., :2], boxes_a[..., 2:])
+    area_b = area(boxes_b[..., :2], boxes_b[..., 2:])
     return overlap_area / (area_a + area_b - overlap_area + eps)
 
 

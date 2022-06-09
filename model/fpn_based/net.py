@@ -37,8 +37,8 @@ class RbboxDetectorNet(nn.Module):
             for extractor in self._feature_extractors:
                 features.append(extractor(features[-1]))
         features = self._feature_pyramid(features)
-        predicted_classes, predicted_locs = self._detector(features)
-        return predicted_classes, predicted_locs
+        predicted_class_scorers, predicted_locs = self._detector(features)
+        return predicted_class_scorers, predicted_locs
 
 
 @dataclass(frozen=True)
